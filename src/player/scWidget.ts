@@ -146,7 +146,8 @@ export async function loadSounds(widgetUrl: string): Promise<Track[]> {
     document.body.appendChild(f);
     const w = SC.Widget(f);
     const done = (fn: () => void) => { clearTimeout(timer); f.remove(); fn(); };
-    const timer = setTimeout(() => done(() => reject(new Error('Не удалось открыть ссылку'))), 20000);
+    // лайки и длинные списки на телефоне грузятся до 20+ секунд — ждём с запасом
+    const timer = setTimeout(() => done(() => reject(new Error('SoundCloud не ответил — попробуйте ещё раз'))), 45000);
     w.bind(SC.Widget.Events.ERROR, () => done(() => reject(new Error('Ссылка недоступна'))));
     w.bind(SC.Widget.Events.READY, () => {
       // виджет догружает данные длинных плейлистов постепенно — ждём несколько раз

@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { resetProfile } from '../../recommend/profile';
 import { clearHistory, getPlaylists } from '../../storage/store';
 import { updateSettings } from '../../storage/settings';
-import { connectProfile, syncAll } from '../../sync/scSync';
+import { connectProfile, syncAll, type ProfileStep } from '../../sync/scSync';
 import { useSettings, useStore } from '../hooks';
 import { Icon } from '../components/Icon';
 import { SceneArt } from '../components/SceneArt';
@@ -23,10 +23,17 @@ export function ProfileScreen() {
   const connect = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!profile.trim()) return;
-    setBusy('connect'); setReport('');
+    setBusy('connect'); setReport('Ищу профиль…');
+    const label = (s: ProfileStep) =>
+      s.state === 'loading' ? `${s.name}: загружаю…`
+      : s.state === 'ok' ? `${s.name}: ${s.count} ✓`
+      : s.state === 'empty' ? `${s.name}: нет`
+      : `${s.name}: SoundCloud не ответил`;
     try {
-      const r = await connectProfile(profile);
-      setReport(`${r.user.name}: ` + r.results.map((x) => (x.ok ? `${x.name} — ${x.count}` : `${x.name} — недоступны`)).join(', '));
+      const r = await connectProfile(profile, (steps) => setReport(steps.map(label).join(' · ')));
+      setProfile(st.scProfile || profile);
+      const ok = r.steps.filter((s) => s.state === 'ok').length;
+      setReport(`${r.user.name} — ` + r.steps.map(label).join(' · ') + (ok ? '. Плейлисты в Библиотеке.' : ''));
     } catch (x) { setReport((x as Error).message); } finally { setBusy(''); }
   };
 
@@ -54,7 +61,7 @@ export function ProfileScreen() {
         <li className="col">
           <label>Ваш профиль — импортируем лайки и ваши треки</label>
           <form className="row" onSubmit={connect}>
-            <input placeholder="soundcloud.com/ваш_ник" value={profile} onChange={(e) => setProfile(e.target.value)} />
+            <input placeholder="ник или ссылка на профиль" autoCapitalize="none" autoCorrect="off" value={profile} onChange={(e) => setProfile(e.target.value)} />
             <button className="pill" disabled={!!busy}>{busy === 'connect' ? <span className="spinner" /> : st.scProfile ? 'Обновить' : 'Подключить'}</button>
           </form>
           {report && <small className="report">{report}</small>}
@@ -67,7 +74,7 @@ export function ProfileScreen() {
           {busy === 'sync' ? <span className="spinner" /> : <Icon name="chevron" size={16} />}
         </li>
       </ul>
-      <p className="hint">Плейлисты, импортированные по ссылке, обновляются сами при запуске (раз в 6 часов). Если лайки «недоступны» — SoundCloud не отдаёт их без API: соберите лайки в плейлист и импортируйте его ссылкой.</p>
+      <p className="hint">Загрузка занимает до минуты. SoundCloud без API отдаёт только последние ~20 лайков — чтобы перенести все, соберите их в плейлист и импортируйте ссылкой. Плейлисты со ссылкой обновляются сами при запуске (раз в 6 часов).</p>
 
       <h3 className="settings-title">Приложение</h3>
       <ul className="settings-list">

@@ -69,18 +69,42 @@ async function syncSpecial(src: string): Promise<Playlist> {
   return importInto(src, 'Мои треки SoundCloud', () => loadSounds(`https://api.soundcloud.com/users/${id}`));
 }
 
-/** Подключить профиль: импортирует лайки и загруженные треки. */
-export async function connectProfile(profileUrl: string) {
-  const url = normalize(profileUrl).replace(/\/(likes|sets|tracks|reposts|albums|popular-tracks)$/, '');
+/** Принимает ссылку на профиль, короткую ссылку, «@ник» или просто ник. */
+export function profileUrl(input: string): string {
+  const s = input.trim().replace(/^@/, '');
+  if (/^[\w-]+$/.test(s)) return `https://soundcloud.com/${s.toLowerCase()}`;
+  return normalize(s).replace(/\/(likes|sets|tracks|reposts|albums|popular-tracks|following|followers)$/, '');
+}
+
+export type ProfileStep = { name: string; state: 'loading' | 'ok' | 'empty' | 'error'; count?: number };
+
+/**
+ * Подключить профиль: лайки и собственные треки.
+ * Пустой список — не ошибка (у слушателя может не быть своих треков).
+ * Виджет отдаёт только последние ~20 лайков: для всех лайков — соберите их в плейлист и импортируйте ссылкой.
+ */
+export async function connectProfile(input: string, onStep?: (steps: ProfileStep[]) => void) {
+  const url = profileUrl(input);
   const user = await scUser(url);
   updateSettings({ scProfile: url });
-  const results: { name: string; ok: boolean; count?: number }[] = [];
-  for (const [src, name] of [[`sc-likes:${user.id}`, 'Лайки'], [`sc-user:${user.id}`, 'Треки']] as const) {
-    try { const p = await syncSpecial(src); results.push({ name, ok: true, count: p.tracks.length }); }
-    catch { results.push({ name, ok: false }); }
+  const steps: ProfileStep[] = [{ name: 'Лайки', state: 'loading' }, { name: 'Мои треки', state: 'loading' }];
+  onStep?.([...steps]);
+  const jobs = [
+    { src: `sc-likes:${user.id}`, title: 'Мои лайки SoundCloud', url: `https://api.soundcloud.com/users/${user.id}/favorites` },
+    { src: `sc-user:${user.id}`, title: 'Мои треки SoundCloud', url: `https://api.soundcloud.com/users/${user.id}` },
+  ];
+  for (const [i, job] of jobs.entries()) {
+    try {
+      const tracks = await loadSounds(job.url);
+      if (tracks.length) {
+        const p = await importInto(job.src, job.title, async () => tracks);
+        steps[i] = { ...steps[i], state: 'ok', count: p.tracks.length };
+      } else steps[i] = { ...steps[i], state: 'empty' };
+    } catch { steps[i] = { ...steps[i], state: 'error' }; }
+    onStep?.([...steps]);
   }
-  refreshDiscovery().catch(() => {});
-  return { user, results };
+  refreshDiscovery(true).catch(() => {});
+  return { user, steps };
 }
 
 // ---- автосинхронизация ----
