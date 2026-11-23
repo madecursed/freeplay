@@ -7,6 +7,65 @@ import { useSettings, useStore } from '../hooks';
 import { ART } from '../art';
 import { refreshDiscovery } from '../../recommend/discovery';
 import { Icon } from '../components/Icon';
+import { exportLibrary, importLibrary } from '../../storage/backup';
+
+/**
+ * Перенос библиотеки между Safari-версией и приложением (у них разные хранилища):
+ * «Скопировать» → в другой версии «Вставить». В Safari можно ещё сохранить файлом.
+ */
+function BackupPanel({ onDone }: { onDone: (msg: string) => void }) {
+  const [mode, setMode] = useState<'' | 'paste' | 'show'>('');
+  const [text, setText] = useState('');
+  const [err, setErr] = useState('');
+
+  const copy = async () => {
+    const data = exportLibrary();
+    try { await navigator.clipboard.writeText(data); onDone('Библиотека скопирована — вставьте её в другой версии'); }
+    catch { setText(data); setMode('show'); }   // буфер недоступен — покажем текст, его можно выделить вручную
+  };
+  const saveFile = () => {
+    const url = URL.createObjectURL(new Blob([exportLibrary()], { type: 'application/json' }));
+    const a = Object.assign(document.createElement('a'), { href: url, download: `nocturne-${new Date().toISOString().slice(0, 10)}.json` });
+    a.click();
+    setTimeout(() => URL.revokeObjectURL(url), 2000);
+  };
+  const doImport = (raw: string) => {
+    setErr('');
+    try {
+      if (!confirm('Заменить библиотеку на этом устройстве импортированной?')) return;
+      const r = importLibrary(raw);
+      onDone(`Импортировано: ${r.tracks} треков`);
+      setTimeout(() => location.reload(), 900);
+    } catch (e) { setErr((e as Error).message.includes('JSON') ? 'Не похоже на библиотеку Nocturne' : (e as Error).message); }
+  };
+
+  return (
+    <ul className="settings-list">
+      <li onClick={copy}><Icon name="queue" /><span>Скопировать библиотеку<small className="block">плейлисты, избранное, история, вкус</small></span><Icon name="chevron" size={16} /></li>
+      <li onClick={() => setMode(mode === 'paste' ? '' : 'paste')}><Icon name="plus" /><span>Вставить библиотеку</span><Icon name={mode === 'paste' ? 'down' : 'chevron'} size={16} /></li>
+      {mode === 'paste' && (
+        <li className="col">
+          <textarea className="backup-text" rows={4} placeholder="Вставьте сюда скопированную библиотеку" value={text} onChange={(e) => setText(e.target.value)} />
+          <div className="row">
+            <button className="pill" disabled={!text.trim()} onClick={() => doImport(text)}>Импортировать</button>
+            <label className="chip">Из файла…<input type="file" accept="application/json,.json" hidden
+              onChange={(e) => { const f = e.target.files?.[0]; if (f) f.text().then(doImport); }} /></label>
+          </div>
+          {err && <small className="err">{err}</small>}
+        </li>
+      )}
+      {mode === 'show' && (
+        <li className="col">
+          <label>Выделите весь текст и скопируйте</label>
+          <textarea className="backup-text" rows={4} readOnly value={text} onFocus={(e) => e.currentTarget.select()} />
+        </li>
+      )}
+      {!document.documentElement.classList.contains('native') && (
+        <li onClick={saveFile}><Icon name="down" /><span>Сохранить файлом</span><Icon name="chevron" size={16} /></li>
+      )}
+    </ul>
+  );
+}
 
 /** Профиль и настройки (референс, экран «Настройки»): фото луны над лесом, аватар, пункты с иконками. */
 export function ProfileScreen() {
@@ -104,6 +163,9 @@ export function ProfileScreen() {
         </li>
       </ul>
       <p className="hint">Загрузка занимает до минуты. Без API SoundCloud отдаёт только последние ~20 лайков — чтобы перенести все, соберите их в плейлист и импортируйте ссылкой.</p>
+
+      <h3 className="settings-title">Перенос библиотеки</h3>
+      <BackupPanel onDone={flash} />
 
       <h3 className="settings-title">Данные</h3>
       <ul className="settings-list">

@@ -128,3 +128,9 @@ html.duo .player-bg { filter: grayscale(1) blur(36px) brightness(.5); }
 /* карточка «Избранное» в ряду плейлистов */
 .liked-card { display: grid; place-items: center; }
 .liked-card::after { display: none; }
+
+/* перенос библиотеки */
+.backup-text { width: 100%; resize: none; background: rgba(0, 0, 0, .3); border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px;
+  font: 12px/1.4 ui-monospace, Menlo, monospace; color: var(--text); outline: 0; }
+.settings-list li.col .row { gap: 10px; }
+.settings-list label.chip { cursor: pointer; }
