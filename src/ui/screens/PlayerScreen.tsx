@@ -1,4 +1,3 @@
-import { useState } from 'react';
 import { player } from '../../player/player';
 import { record, SIGNAL } from '../../recommend/profile';
 import { isLiked, toggleLike } from '../../storage/store';
@@ -6,70 +5,76 @@ import { nav, useNav } from '../navigation';
 import { fmt, usePlayer, useProgress, useStore } from '../hooks';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
+import { TrackList } from '../components/TrackList';
 
-/** Полноэкранный плеер. */
+/** Полноэкранный плеер (по референсу): обложка-карточка, тонкий прогресс, светящаяся кнопка, «Далее». */
 export function PlayerScreen() {
-  const { playerOpen } = useNav();
+  const { playerOpen, queueOpen } = useNav();
   const s = usePlayer();
   const t = s.queue[s.index];
   const liked = useStore(() => (t ? isLiked(t.id) : false));
-  const [showWidget, setShowWidget] = useState(false);
   if (!playerOpen || !t) return null;
   const next = s.queue[s.index + 1];
 
-  const toggleWidget = () => {
-    document.getElementById('sc-host')?.classList.toggle('is-visible', !showWidget);
-    setShowWidget(!showWidget);
-  };
-  const close = () => { document.getElementById('sc-host')?.classList.remove('is-visible'); setShowWidget(false); nav.openPlayer(false); };
+  const close = () => { document.getElementById('sc-host')?.classList.remove('is-visible'); nav.openPlayer(false); };
 
   return (
     <div className="player-screen">
       {t.artwork && <div className="player-bg" style={{ backgroundImage: `url(${t.artwork})` }} />}
-      <div className="player-glow" />
+      <div className="player-aura" />
+
       <header className="player-head">
-        <button className="icon-btn" onClick={close}><Icon name="down" size={26} /></button>
-        <Icon name="sparkle" size={16} className="accent" />
-        <button className="icon-btn" onClick={() => nav.openSheet(t)}><Icon name="more" /></button>
+        <button className="icon-btn" aria-label="Свернуть" onClick={close}><Icon name="down" size={26} /></button>
+        <div className="player-head-mark">
+          <Icon name="sparkle" size={14} />
+          <span>{queueOpen ? 'Очередь' : 'Сейчас играет'}</span>
+        </div>
+        <button className="icon-btn" aria-label="Ещё" onClick={() => nav.openSheet(t, undefined, true)}><Icon name="more" /></button>
       </header>
 
-      <Cover track={t} size="xl" className="player-cover" />
-
-      <div className="player-title">
-        <div className="track-meta">
-          <h2>{t.title}</h2>
-          <p>{t.artist}</p>
+      {queueOpen ? (
+        <div className="player-queue">
+          <TrackList tracks={s.queue.slice(s.index)} empty="Очередь пуста" />
         </div>
-        <button className={`icon-btn ${liked ? 'liked' : ''}`} onClick={() => record(t, toggleLike(t) ? SIGNAL.like : SIGNAL.unlike)}>
-          <Icon name="heart" filled={liked} size={26} />
-        </button>
-      </div>
-
-      <Seek duration={s.duration} />
-      {s.error && <p className="err">{s.error}</p>}
-
-      <div className="controls">
-        <button className={`icon-btn ${s.shuffle ? 'is-on' : ''}`} onClick={player.toggleShuffle}><Icon name="shuffle" /></button>
-        <button className="icon-btn" onClick={player.prev}><Icon name="prev" size={28} /></button>
-        <button className="play-btn huge" onClick={player.toggle}>
-          <Icon name={s.playing ? 'pause' : 'play'} size={30} />
-        </button>
-        <button className="icon-btn" onClick={player.next}><Icon name="next" size={28} /></button>
-        <button className={`icon-btn ${s.repeat !== 'off' ? 'is-on' : ''}`} onClick={player.cycleRepeat}>
-          <Icon name="repeat" />{s.repeat === 'one' && <sup>1</sup>}
-        </button>
-      </div>
-
-      <div className={`player-foot ${showWidget ? 'with-widget' : ''}`}>
-        <div className="up-next">
-          <span className={`bars ${s.playing ? 'on' : ''}`}><i /><i /><i /></span>
-          Далее: {next ? `${next.title} — ${next.artist}` : s.autoRadio ? 'подберу из библиотеки' : '—'}
+      ) : (
+        <div className="player-art">
+          <Cover track={t} size="xl" className="player-cover" />
         </div>
-        <div className="row small-links">
-          <button className={`chip ${s.autoRadio ? 'is-on' : ''}`} onClick={() => player.setAutoRadio(!s.autoRadio)}>Автомикс</button>
-          {t.embed && <button className="chip" onClick={toggleWidget}>{showWidget ? 'Скрыть плеер SoundCloud' : 'Не играет?'}</button>}
-          {t.permalink && <a className="chip" href={t.permalink} target="_blank" rel="noreferrer">SoundCloud ↗</a>}
+      )}
+
+      <div className="player-bottom">
+        <div className="player-title">
+          <div className="track-meta">
+            <h2>{t.title}</h2>
+            <p>{t.artist}</p>
+          </div>
+          <button className={`icon-btn heart ${liked ? 'liked' : ''}`} aria-label="Нравится"
+            onClick={() => record(t, toggleLike(t) ? SIGNAL.like : SIGNAL.unlike)}>
+            <Icon name="heart" filled={liked} size={26} />
+          </button>
         </div>
+
+        <Seek duration={s.duration} />
+        {s.error && <p className="err">{s.error}</p>}
+
+        <div className="controls">
+          <button className={`icon-btn side ${s.shuffle ? 'is-on' : ''}`} aria-label="Перемешать" onClick={player.toggleShuffle}><Icon name="shuffle" /></button>
+          <button className="icon-btn main" aria-label="Назад" onClick={player.prev}><Icon name="prev" size={30} /></button>
+          <button className="orb" aria-label={s.playing ? 'Пауза' : 'Играть'} onClick={player.toggle}>
+            <Icon name={s.playing ? 'pause' : 'play'} size={30} />
+          </button>
+          <button className="icon-btn main" aria-label="Вперёд" onClick={player.next}><Icon name="next" size={30} /></button>
+          <button className={`icon-btn side ${s.repeat !== 'off' ? 'is-on' : ''}`} aria-label="Повтор" onClick={player.cycleRepeat}>
+            <Icon name="repeat" />{s.repeat === 'one' && <sup>1</sup>}
+          </button>
+        </div>
+
+        <button className="up-next" onClick={() => nav.toggleQueue()}>
+          <span className={`wave ${s.playing ? 'on' : ''}`}><i /><i /><i /><i /><i /></span>
+          <span className="up-next-text">
+            {queueOpen ? 'Вернуться к обложке' : <>Далее: {next ? next.title : s.autoRadio ? 'подберу похожее' : '—'}</>}
+          </span>
+        </button>
       </div>
     </div>
   );
@@ -79,10 +84,10 @@ function Seek({ duration }: { duration: number }) {
   const time = useProgress();
   const pct = duration ? Math.min(100, (time / duration) * 100) : 0;
   return (
-    <>
+    <div className="seek-wrap">
       <input className="seek" type="range" min={0} max={duration || 0} step={1} value={Math.min(time, duration || 0)}
         style={{ ['--p' as string]: `${pct}%` }} onChange={(e) => player.seek(+e.target.value)} />
       <div className="times"><span>{fmt(time)}</span><span>{fmt(duration)}</span></div>
-    </>
+    </div>
   );
 }

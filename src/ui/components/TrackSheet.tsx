@@ -3,7 +3,7 @@ import { player } from '../../player/player';
 import { record, SIGNAL } from '../../recommend/profile';
 import { addToPlaylist, createPlaylist, dislike, getPlaylists, isLiked, removeFromPlaylist, toggleLike } from '../../storage/store';
 import { nav, useNav } from '../navigation';
-import { useStore } from '../hooks';
+import { usePlayer, useStore } from '../hooks';
 import { Cover } from './Cover';
 import { Icon } from './Icon';
 
@@ -14,8 +14,9 @@ export function TrackSheet() {
   useStore(() => sheet && isLiked(sheet.track.id));
   const [mode, setMode] = useState<'actions' | 'playlists'>('actions');
   const [name, setName] = useState('');
+  const ps = usePlayer();
   if (!sheet) return null;
-  const { track: t, playlistId } = sheet;
+  const { track: t, playlistId, fromPlayer } = sheet;
   const close = () => { nav.closeSheet(); setMode('actions'); setName(''); };
   const act = (fn: () => void) => () => { fn(); close(); };
 
@@ -28,8 +29,14 @@ export function TrackSheet() {
         </div>
         {mode === 'actions' ? (
           <div className="sheet-list">
-            <button onClick={act(() => player.playNext(t))}><Icon name="next1" />Играть следующим</button>
-            <button onClick={act(() => player.addToQueue(t))}><Icon name="queue" />Добавить в очередь</button>
+            {fromPlayer ? (<>
+              <button onClick={act(() => nav.toggleQueue(true))}><Icon name="queue" />Очередь</button>
+              <button onClick={act(() => player.setAutoRadio(!ps.autoRadio))}><Icon name="sparkle" />Автомикс: {ps.autoRadio ? 'вкл' : 'выкл'}</button>
+              {t.embed && <button onClick={act(() => document.getElementById('sc-host')?.classList.toggle('is-visible'))}><Icon name="cloud" />Не играет? Показать плеер SoundCloud</button>}
+            </>) : (<>
+              <button onClick={act(() => player.playNext(t))}><Icon name="next1" />Играть следующим</button>
+              <button onClick={act(() => player.addToQueue(t))}><Icon name="queue" />Добавить в очередь</button>
+            </>)}
             <button onClick={act(() => record(t, toggleLike(t) ? SIGNAL.like : SIGNAL.unlike))}>
               <Icon name="heart" filled={isLiked(t.id)} className={isLiked(t.id) ? 'liked' : ''} />{isLiked(t.id) ? 'Убрать из избранного' : 'В избранное'}
             </button>

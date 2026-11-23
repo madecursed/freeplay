@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { player } from '../../player/player';
 import { recommend } from '../../recommend/recommend';
-import { refreshDiscovery, useDiscovery } from '../../recommend/discovery';
+import { refreshDiscovery, useDiscovery, type RecMix } from '../../recommend/discovery';
 import { getHistory, getPlaylists, libraryTracks } from '../../storage/store';
 import { nav } from '../navigation';
 import { greeting, tracksWord, useSettings, useStore } from '../hooks';
@@ -63,6 +63,14 @@ export function HomeScreen() {
       ) : (
         <>
           <div className="section-head">
+            <h2>Рекомендации</h2>
+            {d.loading && !d.mixes.length && <span className="spinner small" />}
+          </div>
+          {d.mixes.length ? (
+            <div className="card-row">{d.mixes.map((m) => <MixCard key={m.id} mix={m} />)}</div>
+          ) : <p className="empty">{d.loading ? 'Собираю плейлисты по вашему вкусу…' : 'Импортируйте пару плейлистов — здесь появятся подборки'}</p>}
+
+          <div className="section-head">
             <h2>Для тебя</h2>
             <div className="row">
               {d.loading ? <span className="spinner small" /> : <button onClick={() => refreshDiscovery(true)} aria-label="Обновить"><Icon name="refresh" size={16} /></button>}
@@ -77,13 +85,6 @@ export function HomeScreen() {
             <TrackCards tracks={d.fresh} />
           </>)}
 
-          {d.similar.map((r) => (
-            <div key={r.artist}>
-              <div className="section-head"><h2 className="ellipsis">Если нравится {r.artist}</h2></div>
-              <TrackCards tracks={r.tracks} />
-            </div>
-          ))}
-
           <div className="section-head"><h2>Твои плейлисты</h2>{playlists.length > 0 && <button onClick={() => nav.setTab('library')}>Все →</button>}</div>
           {playlists.length ? (
             <div className="card-row">
@@ -96,11 +97,6 @@ export function HomeScreen() {
               ))}
             </div>
           ) : <Onboarding compact />}
-
-          {d.rediscover.length > 0 && (<>
-            <div className="section-head"><h2>Давно не слушал</h2></div>
-            <TrackCards tracks={d.rediscover} />
-          </>)}
 
           <div className="section-head">
             <h2>Недавно прослушанное</h2>
@@ -127,5 +123,17 @@ function Onboarding({ compact }: { compact?: boolean }) {
       </button>
       {!compact && <p className="hint">Дальше Nocturne сам найдёт новое: по лайкам и релизам исполнителей, которых вы слушаете.</p>}
     </div>
+  );
+}
+
+/** Карточка рекомендованного плейлиста: обложка + две строки, как на референсе. */
+function MixCard({ mix }: { mix: RecMix }) {
+  const art = mix.tracks.find((t) => t.artwork)?.artwork;
+  return (
+    <button className="mix-card" onClick={() => nav.push({ kind: 'mix', title: mix.title, subtitle: mix.subtitle, hue: mix.hue, cover: art, load: async () => mix.tracks })}>
+      <div className="mix-art">{art ? <img src={art} alt="" loading="lazy" /> : <SceneArt hue={mix.hue} seed={mix.id.length} />}</div>
+      <span>{mix.title}</span>
+      <small className="ellipsis">{mix.subtitle}</small>
+    </button>
   );
 }

@@ -5,17 +5,18 @@ import type { Track } from '../types';
 export type Tab = 'home' | 'search' | 'library' | 'profile';
 export type Page =
   | { kind: 'playlist'; id: string } // id 'liked' — «Избранное»
-  | { kind: 'mix'; title: string; subtitle?: string; hue?: number; tags?: string[]; load?: () => Promise<Track[]>; autoplay?: boolean }
+  | { kind: 'mix'; title: string; subtitle?: string; hue?: number; tags?: string[]; load?: () => Promise<Track[]>; autoplay?: boolean; cover?: string }
   | { kind: 'mood' };
 
 interface NavState {
   tab: Tab;
   stack: Page[];
   playerOpen: boolean;
-  sheet: { track: Track; playlistId?: string } | null;
+  queueOpen: boolean;
+  sheet: { track: Track; playlistId?: string; fromPlayer?: boolean } | null;
 }
 
-let state: NavState = { tab: 'home', stack: [], playerOpen: false, sheet: null };
+let state: NavState = { tab: 'home', stack: [], playerOpen: false, queueOpen: false, sheet: null };
 const listeners = new Set<() => void>();
 const set = (p: Partial<NavState>) => { state = { ...state, ...p }; listeners.forEach((f) => f()); };
 const top = () => window.scrollTo(0, 0);
@@ -26,8 +27,9 @@ export const nav = {
   setTab(tab: Tab) { set({ tab, stack: [] }); top(); },
   push(page: Page) { set({ stack: [...state.stack, page] }); top(); },
   pop() { set({ stack: state.stack.slice(0, -1) }); },
-  openPlayer(open = true) { set({ playerOpen: open }); },
-  openSheet(track: Track, playlistId?: string) { set({ sheet: { track, playlistId } }); },
+  openPlayer(open = true) { set({ playerOpen: open, queueOpen: false }); },
+  toggleQueue(open = !state.queueOpen) { set({ queueOpen: open }); },
+  openSheet(track: Track, playlistId?: string, fromPlayer = false) { set({ sheet: { track, playlistId, fromPlayer } }); },
   closeSheet() { set({ sheet: null }); },
 };
 

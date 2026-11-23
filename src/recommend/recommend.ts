@@ -32,7 +32,7 @@ export async function recommend(limit = 30, exclude: Set<string> = new Set(), se
   return diversify(scored.map((x) => x.t), limit);
 }
 
-function matches(t: Track, tags: string[]): boolean {
+export function matches(t: Track, tags: string[]): boolean {
   const own = [t.genre ?? '', ...t.tags].join(' ').toLowerCase();
   return tags.some((tag) => own.includes(tag.toLowerCase()));
 }
