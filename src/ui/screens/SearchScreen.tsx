@@ -54,10 +54,10 @@ export function SearchScreen() {
               </ul>
             </>
           )}
-          {d.forYou.length > 0 && (
+          {d.fresh.length > 0 && (
             <>
-              <div className="section-head"><h3>Популярное для тебя</h3></div>
-              <div className="glass-list"><TrackList tracks={d.forYou.slice(0, 6)} /></div>
+              <div className="section-head"><h3>Новое от твоих артистов</h3></div>
+              <div className="glass-list"><TrackList tracks={d.fresh.slice(0, 6)} /></div>
             </>
           )}
           <p className="hint">Ищет по названию, исполнителю, жанру и тегам среди импортированных треков. Чтобы добавить новую музыку — вставьте ссылку SoundCloud.</p>

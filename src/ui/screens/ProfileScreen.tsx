@@ -70,7 +70,7 @@ export function ProfileScreen() {
         )}
         <li onClick={() => { updateSettings({ deezer: !st.deezer }); refreshDiscovery(true).catch(() => {}); }}>
           <Icon name="sparkle" />
-          <span>Похожие исполнители<small className="block">рекомендации по данным Deezer</small></span>
+          <span>Похожие исполнители в автоплее<small className="block">по данным Deezer — как станции SoundCloud</small></span>
           <span className={`switch ${st.deezer ? 'on' : ''}`} />
         </li>
         <li className="is-disabled"><Icon name="sliders" /><span>Эквалайзер</span><small>скоро</small></li>

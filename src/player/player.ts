@@ -1,6 +1,6 @@
 import type { Track } from '../types';
 import { record, SIGNAL } from '../recommend/profile';
-import { recommend } from '../recommend/recommend';
+import { stationFor } from '../recommend/autoplay';
 import { patchTrack, pushHistory } from '../storage/store';
 import { revealWidget, scPause, scPlay, scPreload, scResume, scSeek, scStop, type ScHandlers } from './scWidget';
 
@@ -140,7 +140,9 @@ async function refill() {
   if (refilling) return;
   refilling = true;
   try {
-    const more = await recommend(15, new Set(state.queue.map((t) => t.id)));
+    // автоплей как в SoundCloud: станция по текущему (последнему сыгранному) треку
+    const seed = player.current() ?? state.queue[state.queue.length - 1];
+    const more = await stationFor(seed, new Set(state.queue.map((t) => t.id)));
     set({ queue: [...state.queue, ...more] });
     preloadNext();
   } finally { refilling = false; }

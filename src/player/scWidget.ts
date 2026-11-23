@@ -176,11 +176,36 @@ export function scPlay(url: string, h: ScHandlers): void {
     return;
   }
   unlockStandby();         // пока ещё длится нажатие
-  void playAsync(url);
+  primeActive();
+  if (SC) startOn(url);    // скрипт уже загружен — без await, всё ещё внутри нажатия
+  else void loadApi().then((api) => { SC = api; startOn(url); });
 }
 
-async function playAsync(url: string) {
-  SC ??= await loadApi();
+/**
+ * «Разогрев»: пока длится нажатие, даём активному плееру «играй» и сразу «пауза».
+ * iPhone засчитывает это как запуск звука по нажатию и разблокирует плеер — если SoundCloud
+ * переиспользует внутри тот же аудиоэлемент, загруженный следом трек заиграет сам.
+ * (Громкость на iPhone из кода не меняется — может проскочить доля секунды звука.)
+ */
+function primeActive() {
+  if (!active?.ready) return;
+  active.w.play();
+  active.w.pause();
+  unlocked.add(active);
+}
+
+/**
+ * Заранее создать плеер при запуске приложения (с треком на паузе), чтобы к первому нажатию
+ * всё было готово и «разогрев» сработал уже на первом треке.
+ */
+export function scWarmup(url?: string) {
+  void loadApi().then((api) => {
+    SC = api;
+    if (!active && url) { active = makeSlot(url, false); markActive(); }
+  }).catch(() => {});
+}
+
+function startOn(url: string) {
   if (!active) {
     active = makeSlot(url, true, (slot) => { if (slot === active) { slot.w.play(); fetchMeta(); ensurePlaying(); } });
     markActive();

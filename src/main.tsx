@@ -4,10 +4,15 @@ import './ui/styles.css';
 import './ui/theme.css';
 import { autoSync } from './sync/scSync';
 import { checkForUpdate } from './update';
+import { scWarmup } from './player/scWidget';
+import { getHistory, libraryTracks } from './storage/store';
 
 createRoot(document.getElementById('root')!).render(<App />);
 
 autoSync();
+
+// плеер SoundCloud создаём заранее (последний трек, на паузе) — к первому нажатию он готов
+scWarmup((getHistory()[0] ?? libraryTracks()[0])?.embed);
 
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   navigator.serviceWorker.register('./sw.js', { updateViaCache: 'none' }).catch(() => {});
