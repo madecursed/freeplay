@@ -5,6 +5,8 @@ import { getHistory, getLiked, isArtistBlocked, isExcluded, libraryTracks } from
 import { load, save } from '../storage/store';
 import { matches, score } from './recommend';
 import { MIXES } from './moods';
+import { similarFor, type SimilarArtist } from './deezer';
+import { getSettings } from '../storage/settings';
 import { weight } from './profile';
 
 /**
@@ -21,13 +23,14 @@ const CACHE_TTL = 12 * 3600_000;
 const SEEDS = 5;           // сколько исполнителей опрашивать
 const PER_LIST = 60;       // сколько треков брать из каждого списка
 
-interface ArtistCache { ts: number; name: string; likes: Track[]; uploads: Track[] }
+/** simOnly — исполнитель найден через Deezer, загружены только его треки (без лайков). */
+interface ArtistCache { ts: number; name: string; likes: Track[]; uploads: Track[]; simOnly?: boolean }
 type Cache = Record<string, ArtistCache>;
 
 export interface ArtistRow { artist: string; tracks: Track[] }
 
 /** Рекомендованный плейлист (собирается автоматически). */
-export interface RecMix { id: string; title: string; subtitle: string; tracks: Track[]; hue: number }
+export interface RecMix { id: string; title: string; subtitle: string; tracks: Track[]; hue: number; source?: 'deezer' }
 export interface Discovery {
   loading: boolean;
   updatedAt: number;
@@ -84,15 +87,15 @@ function seedArtists(): { id: number; name: string }[] {
 }
 const artistWeight = (name: string) => weight(`artist:${name.toLowerCase()}`);
 
-async function fetchArtist(id: number, name: string, force: boolean): Promise<ArtistCache | null> {
+async function fetchArtist(id: number, name: string, force: boolean, withLikes = true): Promise<ArtistCache | null> {
   const c = cache[id];
-  if (c && !force && Date.now() - c.ts < CACHE_TTL) return c;
+  if (c && !force && Date.now() - c.ts < CACHE_TTL && !(withLikes && c.simOnly)) return c;
   const [likes, uploads] = await Promise.allSettled([
-    loadSounds(`https://api.soundcloud.com/users/${id}/favorites`),
+    withLikes ? loadSounds(`https://api.soundcloud.com/users/${id}/favorites`) : Promise.resolve([] as Track[]),
     loadSounds(`https://api.soundcloud.com/users/${id}`),
   ]);
   const entry: ArtistCache = {
-    ts: Date.now(), name,
+    ts: Date.now(), name, simOnly: !withLikes,
     likes: likes.status === 'fulfilled' ? likes.value.slice(0, PER_LIST) : c?.likes ?? [],
     uploads: uploads.status === 'fulfilled' ? uploads.value.slice(0, PER_LIST) : c?.uploads ?? [],
   };
@@ -134,8 +137,13 @@ function compose(entries: ArtistCache[]) {
   const played = new Set(history.slice(0, 60).map((t) => t.id));
   const rediscover = capArtists(rank(lib.filter((t) => ok(t) && !played.has(t.id)), recent)).slice(0, 15);
 
+  // «Похожие на X» (Deezer): популярные треки похожих исполнителей, по 2 от каждого
+  const dz: ArtistRow[] = simGroups
+    .map((g) => ({ artist: g.seed, tracks: capArtists(rank(uniq(g.entries.flatMap(topUploads).filter(fresh)), recent)).slice(0, 20) }))
+    .filter((r) => r.tracks.length >= 5);
+
   // «Для тебя»: ~70% новое, ~30% забытое из библиотеки, по вкусу; не больше 2 треков исполнителя
-  const newPool = capArtists(rank(uniq([...similar.flatMap((r) => r.tracks), ...newest]), recent), 3);
+  const newPool = capArtists(rank(uniq([...dz.flatMap((r) => r.tracks), ...similar.flatMap((r) => r.tracks), ...newest]), recent), 3);
   const forYou: Track[] = [];
   const used = new Set<string>();
   let n = 0, o = 0;
@@ -144,8 +152,8 @@ function compose(entries: ArtistCache[]) {
     const t = takeOld ? rediscover[o++] : newPool[n++] ?? rediscover[o++];
     if (t && !used.has(t.id)) { used.add(t.id); forYou.push(t); }
   }
-  const pool = uniq([...entries.flatMap((e) => [...e.likes, ...e.uploads]).filter(fresh), ...lib.filter(ok)]);
-  const mixes = buildMixes({ newPool, similar, newest, rediscover, pool, recent });
+  const pool = uniq([...entries.flatMap((e) => [...e.likes, ...e.uploads]).filter(fresh), ...simGroups.flatMap((g) => g.entries.flatMap(topUploads)).filter(fresh), ...lib.filter(ok)]);
+  const mixes = buildMixes({ dz, newPool, similar, newest, rediscover, pool, recent });
   set({ forYou: noRepeats(capArtists(forYou)), fresh: newest, similar, rediscover, mixes, seeds: entries.length });
 }
 
@@ -166,7 +174,8 @@ export function refreshDiscovery(force = false): Promise<void> {
   if (running) return running;
   running = (async () => {
     const seeds = seedArtists();
-    // сразу показываем то, что есть в кэше
+    // сразу показываем то, что есть в кэше (включая прошлые находки Deezer)
+    simGroups = loadGroups();
     compose(seeds.map((s) => cache[s.id]).filter(Boolean));
     if (!seeds.length) { set({ loading: false, updatedAt: Date.now() }); return; }
     set({ loading: true });
@@ -175,6 +184,7 @@ export function refreshDiscovery(force = false): Promise<void> {
       const e = await fetchArtist(s.id, s.name, force).catch(() => null);
       if (e) { entries.push(e); compose(entries); }
     }
+    if (getSettings().deezer !== false) await deezerStep(seeds, entries, force).catch(() => {});
     // чистим кэш от исполнителей, которых давно нет среди семян
     for (const [id, c] of Object.entries(cache)) if (Date.now() - c.ts > 7 * CACHE_TTL) delete cache[id];
     save(CACHE_KEY, cache);
@@ -191,7 +201,7 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
  *  жанровые миксы — группировка найденного и библиотеки по жанру;
  *  миксы-настроения («Потерянный сон», «Вечная осень»…) — по тегам; «Забытое» — из библиотеки.
  */
-function buildMixes(p: { newPool: Track[]; similar: ArtistRow[]; newest: Track[]; rediscover: Track[]; pool: Track[]; recent: Set<string> }): RecMix[] {
+function buildMixes(p: { dz: ArtistRow[]; newPool: Track[]; similar: ArtistRow[]; newest: Track[]; rediscover: Track[]; pool: Track[]; recent: Set<string> }): RecMix[] {
   const out: RecMix[] = [];
   const taken = new Set<string>();
   const MIN = 5;
@@ -203,6 +213,7 @@ function buildMixes(p: { newPool: Track[]; similar: ArtistRow[]; newest: Track[]
     out.push({ ...m, tracks: noRepeats(ts) });
   };
 
+  for (const [i, r] of p.dz.entries()) add({ id: 'dz-' + r.artist, title: 'Похожие на', subtitle: r.artist, hue: 262 + i * 10, source: 'deezer' }, r.tracks, 20);
   for (const [i, r] of p.similar.entries()) add({ id: 'sim-' + r.artist, title: 'Если нравится', subtitle: r.artist, hue: 280 + i * 8 }, r.tracks, 15);
   for (const m of MIXES) add({ id: 'mood-' + m.id, title: m.title, subtitle: m.subtitle, hue: m.hue }, rank(p.pool.filter((t) => matches(t, m.tags)), p.recent));
 
@@ -220,5 +231,54 @@ function buildMixes(p: { newPool: Track[]; similar: ArtistRow[]; newest: Track[]
   add({ id: 'fresh', title: 'Новинки', subtitle: 'твоих артистов', hue: 255 }, p.newest);
   add({ id: 'forgotten', title: 'Забытое', subtitle: 'из библиотеки', hue: 300 }, p.rediscover);
   // «Открытия» — первыми на главной
-  return out.sort((a, b) => +(b.id === 'discover') - +(a.id === 'discover'));
+  // на главной первыми — «Открытия», затем «Похожие на…» (Deezer)
+  const rankOf = (m: RecMix) => (m.id === 'discover' ? 0 : m.source === 'deezer' ? 1 : 2);
+  return out.sort((a, b) => rankOf(a) - rankOf(b));
+}
+
+// ---------------------------------------------------------------------------
+// Deezer: похожие исполнители (модуль ./deezer). Подробно — docs/RECOMMENDATIONS.md.
+// ---------------------------------------------------------------------------
+interface SimGroup { seed: string; entries: ArtistCache[] }
+let simGroups: SimGroup[] = [];
+const GROUPS_KEY = 'nc.dz.groups.v1';
+
+function loadGroups(): SimGroup[] {
+  const saved = load<{ seed: string; ids: number[] }[]>(GROUPS_KEY, []);
+  return saved.map((g) => ({ seed: g.seed, entries: g.ids.map((id) => cache[id]).filter(Boolean) })).filter((g) => g.entries.length);
+}
+
+/** Не песня: подкасты, радиошоу, интервью, сырые записи, многочасовые миксы. */
+const NOT_SONG = /\b(podcast|episode|ep\.?\s?\d+|radio (hour|show)|interview|recording \d{4}|live stream|livestream|q&a|подкаст|выпуск|интервью|эфир)\b/i;
+const isSong = (t: Track) => !NOT_SONG.test(t.title) && (t.duration === 0 || (t.duration >= 60 && t.duration <= 600));
+
+/** Самые популярные песни исполнителя (по числу прослушиваний в SoundCloud). */
+function topUploads(e: ArtistCache): Track[] {
+  return e.uploads.filter(isSong).sort((a, b) => (b.plays ?? 0) - (a.plays ?? 0)).slice(0, 10);
+}
+
+/**
+ * Для 3 главных семян: Deezer → похожие исполнители → их профили на SoundCloud → их треки.
+ * Не больше 4 похожих на семя; загружаем по 2 параллельно; разделы обновляются по мере загрузки.
+ */
+async function deezerStep(seeds: { id: number; name: string }[], entries: ArtistCache[], force: boolean) {
+  const seedIds = new Set(seeds.map((s) => s.id));
+  const groups: SimGroup[] = [];
+  const saved: { seed: string; ids: number[] }[] = [];
+  for (const s of seeds.slice(0, 3)) {
+    const sims: SimilarArtist[] = await similarFor(s.name, 6).catch(() => []);
+    const pick = sims.filter((a) => !seedIds.has(a.scId)).slice(0, 4);
+    const got: { id: number; e: ArtistCache }[] = [];
+    for (let i = 0; i < pick.length; i += 2) {
+      const res = await Promise.all(pick.slice(i, i + 2).map(async (a) => ({ id: a.scId, e: await fetchArtist(a.scId, a.name, force, false).catch(() => null) })));
+      for (const r of res) if (r.e) got.push({ id: r.id, e: r.e });
+    }
+    if (got.length) {
+      groups.push({ seed: s.name, entries: got.map((g) => g.e) });
+      saved.push({ seed: s.name, ids: got.map((g) => g.id) });
+      simGroups = [...groups];
+      compose(entries);
+    }
+  }
+  if (saved.length) save(GROUPS_KEY, saved);
 }

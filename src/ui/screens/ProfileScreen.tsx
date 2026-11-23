@@ -5,6 +5,7 @@ import { updateSettings } from '../../storage/settings';
 import { connectProfile, syncAll, type ProfileStep } from '../../sync/scSync';
 import { useSettings, useStore } from '../hooks';
 import { ART } from '../art';
+import { refreshDiscovery } from '../../recommend/discovery';
 import { Icon } from '../components/Icon';
 
 /** Профиль и настройки (референс, экран «Настройки»): фото луны над лесом, аватар, пункты с иконками. */
@@ -67,6 +68,11 @@ export function ProfileScreen() {
             </div>
           </li>
         )}
+        <li onClick={() => { updateSettings({ deezer: !st.deezer }); refreshDiscovery(true).catch(() => {}); }}>
+          <Icon name="sparkle" />
+          <span>Похожие исполнители<small className="block">рекомендации по данным Deezer</small></span>
+          <span className={`switch ${st.deezer ? 'on' : ''}`} />
+        </li>
         <li className="is-disabled"><Icon name="sliders" /><span>Эквалайзер</span><small>скоро</small></li>
         <li className="is-disabled"><Icon name="lyrics" /><span>Тексты песен</span><small>скоро</small></li>
         <li onClick={() => toggle('about')}><Icon name="info" /><span>О приложении</span><Icon name={open === 'about' ? 'down' : 'chevron'} size={16} /></li>

@@ -14,11 +14,13 @@ export interface Settings {
   scProfile: string;
   /** Обложки: фиолетовые в стиле Nocturne или оригинальные. */
   coverStyle: 'nocturne' | 'original';
+  /** Рекомендации «Похожие на…» по данным Deezer. */
+  deezer: boolean;
 }
 
 // v3: приложение работает только с SoundCloud — каталожные источники выключены (код оставлен)
 const VERSION = 3;
-const DEFAULTS: Settings = { v: VERSION, name: 'Слушатель', sources: [], jamendoId: '', scProxy: '', scProfile: '', coverStyle: 'nocturne' };
+const DEFAULTS: Settings = { v: VERSION, name: 'Слушатель', sources: [], jamendoId: '', scProxy: '', scProfile: '', coverStyle: 'nocturne', deezer: true };
 
 function init(): Settings {
   const saved = load<Partial<Settings>>('nc.settings', {});

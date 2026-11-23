@@ -120,3 +120,7 @@ html.duo .player-bg { filter: grayscale(1) blur(36px) brightness(.5); }
 
 /* два скрытых плеера SoundCloud: показываем только активный */
 #sc-host iframe:not(.is-active) { position: absolute; left: -9999px; width: 300px; height: 120px; }
+
+/* метка источника на карточке подборки */
+.mix-badge { position: absolute; left: 7px; top: 7px; z-index: 1; font-size: 10px; letter-spacing: .04em; padding: 2px 7px; border-radius: 999px;
+  color: #f5e9ff; background: rgba(162, 56, 255, .55); border: 1px solid rgba(233, 213, 255, .35); }

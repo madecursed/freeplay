@@ -103,6 +103,23 @@ function ensurePlaying() {
   setTimeout(() => check(false), 5000);
 }
 
+/**
+ * «Разблокировка» запасного плеера. iPhone разрешает звук в плеере, только если по нему было нажатие.
+ * Запасной плеер нажатий не получает — поэтому, пока длится ваше нажатие, запускаем и тут же
+ * останавливаем его. Вызывается только когда основной плеер не играет (нажали ▶ или выбрали трек),
+ * и до запуска основного — чтобы не прервать его (на iPhone громкость из кода не меняется).
+ */
+const unlocked = new WeakSet<Slot>();
+function unlockStandby() {
+  const s = standby;
+  if (!s?.ready || unlocked.has(s)) return;
+  unlocked.add(s);
+  s.w.setVolume(0);   // на компьютере — тишина; на iPhone игнорируется, поэтому пауза сразу
+  s.w.play();
+  s.w.pause();
+  setTimeout(() => { s.w.pause(); s.w.seekTo(0); s.w.setVolume(100); }, 250);
+}
+
 function markActive() {
   for (const s of [active, standby]) s?.iframe.classList.toggle('is-active', s === active);
 }
@@ -145,16 +162,20 @@ export function scPlay(url: string, h: ScHandlers): void {
   handlers = h;
   if (SC && standby?.ready && standby.url === url) {
     const prev = active;
+    if (prev) unlocked.add(prev);
     active = standby;
     standby = prev;
     switching = false;
+    active.w.setVolume(100);
     active.w.play();        // ← синхронно, внутри нажатия
+    unlocked.add(active);
     prev?.w.pause();
     markActive();
     fetchMeta();
     ensurePlaying();
     return;
   }
+  unlockStandby();         // пока ещё длится нажатие
   void playAsync(url);
 }
 
@@ -191,7 +212,7 @@ export function revealWidget(show = true) {
 }
 
 export const scPause = () => active?.w.pause();
-export const scResume = () => { active?.w.play(); attempt++; };
+export const scResume = () => { unlockStandby(); active?.w.play(); if (active) unlocked.add(active); attempt++; };
 export const scSeek = (sec: number) => active?.w.seekTo(sec * 1000);
 export const scStop = () => { active?.w.pause(); standby?.w.pause(); };
 

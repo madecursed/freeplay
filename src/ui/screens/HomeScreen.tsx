@@ -128,7 +128,11 @@ function MixCard({ mix }: { mix: RecMix }) {
   const art = mixArt(mix.id);
   return (
     <button className="mix-card" onClick={() => nav.push({ kind: 'mix', title: mix.title, subtitle: mix.subtitle, hue: mix.hue, cover: art, load: async () => mix.tracks })}>
-      <div className="mix-art"><img src={art} alt="" loading="lazy" /><span className="mix-count">{mix.tracks.length}</span></div>
+      <div className="mix-art">
+        <img src={art} alt="" loading="lazy" />
+        {mix.source === 'deezer' && <span className="mix-badge">Deezer</span>}
+        <span className="mix-count">{mix.tracks.length}</span>
+      </div>
       <span className="clamp-2">{mix.title}</span>
       <small className="clamp-1">{mix.subtitle}</small>
     </button>
