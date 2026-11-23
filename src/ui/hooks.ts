@@ -1,9 +1,11 @@
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { player } from '../player/player';
+import { player, progress } from '../player/player';
 import { subscribeStore } from '../storage/store';
 import { getSettings, subscribeSettings } from '../storage/settings';
 
 export const usePlayer = () => useSyncExternalStore(player.subscribe, player.get);
+/** Позиция трека (сек). Использовать только в компонентах прогресса. */
+export const useProgress = () => useSyncExternalStore(progress.subscribe, progress.get);
 export const useStore = <T,>(get: () => T) => useSyncExternalStore(subscribeStore, get);
 export const useSettings = () => useSyncExternalStore(subscribeSettings, getSettings);
 

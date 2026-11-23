@@ -11,14 +11,11 @@ export const sourceById = (id: SourceId) => ALL_SOURCES.find((s) => s.id === id)
 /** Источники, которые показываем в выборе: SoundCloud API — только если настроен прокси (подписка Pro). */
 export const visibleSources = () => ALL_SOURCES.filter((s) => s.id !== 'soundcloud' || s.enabled());
 
-/**
- * Источники, выбранные в настройках (основной — первый).
- * Если ни один выбранный не настроен — запасной вариант из доступных, чтобы приложение не было пустым.
- */
+/** Источники-каталоги, выбранные в настройках (основной — первый). В режиме «только SoundCloud» их нет. */
 export function activeSources(): { list: MusicSource[]; fallback: boolean } {
   const chosen = getSettings().sources.map(sourceById).filter((s) => s && s.enabled());
-  if (chosen.length) return { list: chosen, fallback: false };
-  return { list: ALL_SOURCES.filter((s) => s.enabled()), fallback: true };
+  // пустой список — нормальный режим «только SoundCloud»: всё берётся из библиотеки
+  return { list: chosen, fallback: false };
 }
 
 /** Опрашивает активные источники параллельно; упавший источник не ломает результат. */

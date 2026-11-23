@@ -1,6 +1,5 @@
 import { useMemo, useState } from 'react';
-import { fromAll } from '../../sources';
-import { createPlaylist, getHistory, getLiked, getPlaylists } from '../../storage/store';
+import { createPlaylist, getHistory, getLiked, getPlaylists, libraryTracks } from '../../storage/store';
 import { nav } from '../navigation';
 import { tracksWord, useStore } from '../hooks';
 import { Cover } from '../components/Cover';
@@ -19,12 +18,12 @@ export function LibraryScreen() {
   // исполнители из избранного и истории, по частоте
   const artists = useMemo(() => {
     const m = new Map<string, { name: string; count: number; art?: string }>();
-    for (const t of [...liked, ...history]) {
+    for (const t of [...liked, ...playlists.flatMap((p) => p.tracks), ...history]) {
       const a = m.get(t.artist) ?? { name: t.artist, count: 0, art: t.artwork };
       a.count++; m.set(t.artist, a);
     }
     return [...m.values()].sort((a, b) => b.count - a.count);
-  }, [liked, history]);
+  }, [liked, history, playlists]);
 
   const create = (e: React.FormEvent) => {
     e.preventDefault();
@@ -63,7 +62,7 @@ export function LibraryScreen() {
           {importing ? <li><ScImport onDone={() => setImporting(false)} /></li> : (
             <li onClick={() => setImporting(true)}>
               <div className="cover cover-md create-tile sc-tile"><Icon name="cloud" size={24} /></div>
-              <div className="track-meta"><div className="track-title">Импорт из SoundCloud</div><div className="track-sub">по ссылке</div></div>
+              <div className="track-meta"><div className="track-title">Импорт из SoundCloud</div><div className="track-sub">по ссылкам, можно несколько</div></div>
             </li>
           )}
           <li onClick={() => nav.push({ kind: 'playlist', id: 'liked' })}>
@@ -84,7 +83,7 @@ export function LibraryScreen() {
           {artists.map((a) => (
             <li key={a.name} onClick={() => nav.push({
               kind: 'mix', title: a.name, subtitle: 'исполнитель',
-              load: async () => (await fromAll((s) => s.search(a.name, 30))).sort((x, y) => +(y.artist === a.name) - +(x.artist === a.name)),
+              load: async () => libraryTracks().filter((t) => t.artist === a.name),
             })}>
               <Cover src={a.art} size="md" className="round" />
               <div className="track-meta"><div className="track-title">{a.name}</div><div className="track-sub">{tracksWord(a.count)} в библиотеке</div></div>

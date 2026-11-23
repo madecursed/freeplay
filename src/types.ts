@@ -30,4 +30,7 @@ export interface Playlist {
   name: string;
   tracks: Track[];
   created: number;
+  /** Ссылка SoundCloud, из которой импортирован плейлист — для автосинхронизации. */
+  sourceUrl?: string;
+  syncedAt?: number;
 }

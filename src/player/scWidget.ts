@@ -100,7 +100,6 @@ export const scStop = () => widget?.pause();
 /** Превращает ссылку SoundCloud (трек, плейлист, исполнитель) в список треков. */
 export async function scResolve(url: string): Promise<{ title: string; tracks: Track[] }> {
   url = url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`;
-  const SC = await loadApi();
   // oEmbed разворачивает короткие ссылки on.soundcloud.com и отдаёт каноническую api-ссылку для виджета
   const o = await fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`)
     .then((r) => (r.ok ? r.json() : null)).catch(() => null);
@@ -122,7 +121,22 @@ export async function scResolve(url: string): Promise<{ title: string; tracks: T
     };
   }
 
-  const tracks = await new Promise<Track[]>((resolve, reject) => {
+  return { title, tracks: await loadSounds(widgetUrl) };
+}
+
+/** Метаданные профиля по ссылке: id пользователя и имя (через oEmbed). */
+export async function scUser(profileUrl: string): Promise<{ id: string; name: string }> {
+  const o = await fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(profileUrl)}`)
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  const id = (o?.html as string | undefined)?.match(/api\.soundcloud\.com%2Fusers%2F(\d+)/)?.[1];
+  if (!id) throw new Error('Профиль не найден — проверьте ссылку soundcloud.com/ваш_ник');
+  return { id, name: o.author_name ?? o.title ?? 'SoundCloud' };
+}
+
+/** Загружает список треков через скрытый виджет (плейлист, треки пользователя, лайки). */
+export async function loadSounds(widgetUrl: string): Promise<Track[]> {
+  const SC = await loadApi();
+  return new Promise<Track[]>((resolve, reject) => {
     const f = document.createElement('iframe');
     f.src = widgetSrc(widgetUrl, false);
     f.style.cssText = 'position:fixed;left:-9999px;width:300px;height:160px;';
@@ -140,5 +154,4 @@ export async function scResolve(url: string): Promise<{ title: string; tracks: T
       collect(0);
     });
   });
-  return { title, tracks };
 }

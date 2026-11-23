@@ -14,7 +14,6 @@ export interface PlayerState {
   index: number;
   playing: boolean;
   loading: boolean;
-  time: number;
   duration: number;
   autoRadio: boolean;
   shuffle: boolean;
@@ -25,12 +24,30 @@ export interface PlayerState {
 const audio = new Audio();
 audio.preload = 'auto';
 let state: PlayerState = {
-  queue: [], index: -1, playing: false, loading: false, time: 0, duration: 0,
+  queue: [], index: -1, playing: false, loading: false, duration: 0,
   autoRadio: true, shuffle: false, repeat: 'off',
 };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<PlayerState>) => { state = { ...state, ...patch }; listeners.forEach((f) => f()); };
 const isEmbed = () => !!state.queue[state.index]?.embed;
+
+/**
+ * Позиция трека — отдельное хранилище: обновляется часто, и подписаны на неё
+ * только полоски прогресса, а не всё приложение (иначе интерфейс тормозит).
+ */
+let time = 0, lastEmit = 0;
+const timeListeners = new Set<() => void>();
+function setTime(t: number, force = false) {
+  time = t;
+  const now = performance.now();
+  if (!force && now - lastEmit < 250) return; // не чаще 4 раз в секунду
+  lastEmit = now;
+  timeListeners.forEach((f) => f());
+}
+export const progress = {
+  subscribe(fn: () => void) { timeListeners.add(fn); return () => { timeListeners.delete(fn); }; },
+  get: () => time,
+};
 
 export const player = {
   subscribe(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; },
@@ -45,12 +62,12 @@ export const player = {
   },
   playNext(t: Track) { const q = state.queue.filter((x) => x.id !== t.id); q.splice(state.index + 1, 0, t); set({ queue: q }); },
   addToQueue(t: Track) { set({ queue: [...state.queue, t] }); },
-  play() { if (isEmbed()) scResume(); else audio.play().catch(onError); },
-  pause() { if (isEmbed()) scPause(); else audio.pause(); },
+  play() { set({ playing: true }); if (isEmbed()) scResume(); else audio.play().catch(onError); },
+  pause() { set({ playing: false }); if (isEmbed()) scPause(); else audio.pause(); },
   toggle() { if (!player.current()) return; state.playing ? player.pause() : player.play(); },
   next() { skipSignal(); advance(1, true); },
-  prev() { if (state.time > 5) player.seek(0); else advance(-1, true); },
-  seek(sec: number) { if (isEmbed()) scSeek(sec); else audio.currentTime = sec; set({ time: sec }); },
+  prev() { if (time > 5) player.seek(0); else advance(-1, true); },
+  seek(sec: number) { if (isEmbed()) scSeek(sec); else audio.currentTime = sec; setTime(sec, true); },
   setAutoRadio(v: boolean) { set({ autoRadio: v }); },
   toggleShuffle() {
     const on = !state.shuffle;
@@ -70,7 +87,8 @@ function shuffled<T>(a: T[]): T[] {
 function load(i: number) {
   const t = state.queue[i];
   if (!t) return;
-  set({ index: i, loading: true, time: 0, duration: t.duration, error: undefined });
+  set({ index: i, loading: true, playing: true, duration: t.duration, error: undefined });
+  setTime(0, true);
   if (t.embed) {
     audio.pause();
     audio.removeAttribute('src');
@@ -103,7 +121,7 @@ async function advance(dir: number, manual = false) {
 // Пропуск в первые 30 сек — отрицательный сигнал для рекомендаций.
 function skipSignal() {
   const t = player.current();
-  if (t && state.time < 30) record(t, SIGNAL.skipEarly);
+  if (t && time < 30) record(t, SIGNAL.skipEarly);
 }
 
 let refilling = false;
@@ -126,7 +144,8 @@ function onError(e: unknown) {
 audio.addEventListener('playing', () => set({ playing: true, loading: false }));
 audio.addEventListener('pause', () => { if (!isEmbed()) set({ playing: false }); });
 audio.addEventListener('waiting', () => set({ loading: true }));
-audio.addEventListener('timeupdate', () => { if (!isEmbed()) set({ time: audio.currentTime, duration: audio.duration || state.duration }); });
+audio.addEventListener('timeupdate', () => { if (!isEmbed()) setTime(audio.currentTime); });
+audio.addEventListener('durationchange', () => { if (!isEmbed() && audio.duration && isFinite(audio.duration)) set({ duration: audio.duration }); });
 audio.addEventListener('ended', finished);
 audio.addEventListener('error', () => {
   if (isEmbed() || !audio.getAttribute('src')) return;
@@ -139,7 +158,7 @@ const sc: ScHandlers = {
   onPlay: () => set({ playing: true, loading: false }),
   onPause: () => set({ playing: false }),
   onFinish: finished,
-  onProgress: (sec) => set({ time: sec }),
+  onProgress: (sec) => setTime(sec),
   onMeta: (meta) => {
     const t = player.current();
     if (!t?.embed) return;

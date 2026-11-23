@@ -1,20 +1,40 @@
 import { useState } from 'react';
-import { ALL_SOURCES } from '../../sources';
 import { resetProfile } from '../../recommend/profile';
-import { clearHistory } from '../../storage/store';
-import { makePrimary, toggleSource, updateSettings } from '../../storage/settings';
-import { useSettings } from '../hooks';
+import { clearHistory, getPlaylists } from '../../storage/store';
+import { updateSettings } from '../../storage/settings';
+import { connectProfile, syncAll } from '../../sync/scSync';
+import { useSettings, useStore } from '../hooks';
 import { Icon } from '../components/Icon';
 import { SceneArt } from '../components/SceneArt';
 
-/** Профиль и настройки. */
+/** Профиль: подключение SoundCloud, синхронизация, настройки. */
 export function ProfileScreen() {
   const st = useSettings();
+  const playlists = useStore(getPlaylists);
+  const synced = playlists.filter((p) => p.sourceUrl);
+  const lastSync = Math.max(0, ...synced.map((p) => p.syncedAt ?? 0));
+  const [profile, setProfile] = useState(st.scProfile);
+  const [busy, setBusy] = useState<'' | 'connect' | 'sync'>('');
+  const [report, setReport] = useState('');
   const [about, setAbout] = useState(false);
-  const [pro, setPro] = useState(!!st.scProxy);
   const [done, setDone] = useState('');
-  const flash = (msg: string) => { setDone(msg); setTimeout(() => setDone(''), 2000); };
-  const sources = ALL_SOURCES.filter((s) => s.id !== 'soundcloud' || s.enabled());
+  const flash = (msg: string) => { setDone(msg); setTimeout(() => setDone(''), 2200); };
+
+  const connect = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!profile.trim()) return;
+    setBusy('connect'); setReport('');
+    try {
+      const r = await connectProfile(profile);
+      setReport(`${r.user.name}: ` + r.results.map((x) => (x.ok ? `${x.name} — ${x.count}` : `${x.name} — недоступны`)).join(', '));
+    } catch (x) { setReport((x as Error).message); } finally { setBusy(''); }
+  };
+
+  const syncNow = async () => {
+    setBusy('sync');
+    const n = await syncAll(true).catch(() => 0);
+    setBusy(''); flash(`Обновлено плейлистов: ${n}`);
+  };
 
   return (
     <div className="screen">
@@ -29,41 +49,28 @@ export function ProfileScreen() {
         </div>
       </div>
 
-      <h3 className="settings-title">Источники музыки</h3>
-      <ul className="settings-list glass">
-        {sources.map((s) => {
-          const idx = st.sources.indexOf(s.id);
-          return (
-            <li key={s.id}>
-              <button className={`star ${idx === 0 ? 'is-on' : ''}`} title="Сделать основным" onClick={() => makePrimary(s.id)}>
-                <Icon name="sparkle" size={16} />
-              </button>
-              <span onClick={() => toggleSource(s.id)}>
-                {s.label}{idx === 0 && <em className="badge">основной</em>}{!s.enabled() && <small> · нужен ключ</small>}
-              </span>
-              <span className={`switch ${idx >= 0 ? 'on' : ''}`} onClick={() => toggleSource(s.id)} />
-            </li>
-          );
-        })}
+      <h3 className="settings-title">SoundCloud</h3>
+      <ul className="settings-list">
         <li className="col">
-          <label>Jamendo Client ID — бесплатно на devportal.jamendo.com</label>
-          <input placeholder="например, 1a2b3c4d" value={st.jamendoId} onChange={(e) => updateSettings({ jamendoId: e.target.value.trim() })} />
+          <label>Ваш профиль — импортируем лайки и ваши треки</label>
+          <form className="row" onSubmit={connect}>
+            <input placeholder="soundcloud.com/ваш_ник" value={profile} onChange={(e) => setProfile(e.target.value)} />
+            <button className="pill" disabled={!!busy}>{busy === 'connect' ? <span className="spinner" /> : st.scProfile ? 'Обновить' : 'Подключить'}</button>
+          </form>
+          {report && <small className="report">{report}</small>}
+        </li>
+        <li onClick={busy ? undefined : syncNow}>
+          <Icon name="refresh" />
+          <span>Синхронизировать сейчас<small className="block">
+            {synced.length ? `${synced.length} плейлистов со ссылкой · ${lastSync ? new Date(lastSync).toLocaleString('ru', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'ещё не обновлялись'}` : 'нет импортированных плейлистов'}
+          </small></span>
+          {busy === 'sync' ? <span className="spinner" /> : <Icon name="chevron" size={16} />}
         </li>
       </ul>
-      <p className="hint">✦ — основной источник: его треки идут первыми. SoundCloud без подписки — через «Библиотека → Импорт из SoundCloud» или вставьте ссылку в поиск.</p>
-
-      <button className="settings-title as-btn" onClick={() => setPro(!pro)}>SoundCloud API (подписка Pro) {pro ? '▾' : '▸'}</button>
-      {pro && (
-        <ul className="settings-list glass">
-          <li className="col">
-            <label>Адрес прокси (worker/ в репозитории)</label>
-            <input placeholder="https://….workers.dev" value={st.scProxy} onChange={(e) => updateSettings({ scProxy: e.target.value.trim() })} />
-          </li>
-        </ul>
-      )}
+      <p className="hint">Плейлисты, импортированные по ссылке, обновляются сами при запуске (раз в 6 часов). Если лайки «недоступны» — SoundCloud не отдаёт их без API: соберите лайки в плейлист и импортируйте его ссылкой.</p>
 
       <h3 className="settings-title">Приложение</h3>
-      <ul className="settings-list glass">
+      <ul className="settings-list">
         <li className="is-disabled"><Icon name="sliders" /><span>Эквалайзер</span><small>скоро</small></li>
         <li className="is-disabled"><Icon name="lyrics" /><span>Тексты песен</span><small>скоро</small></li>
         <li onClick={() => { if (confirm('Сбросить рекомендации? Приложение забудет ваш вкус.')) { resetProfile(); flash('Рекомендации сброшены'); } }}>
@@ -74,11 +81,11 @@ export function ProfileScreen() {
       </ul>
       {about && (
         <p className="hint">
-          Nocturne 0.3 — плеер без рекламы. Музыка из открытых каталогов Jamendo, Internet Archive и Audius через их официальные API,
-          SoundCloud — через официальный встраиваемый плеер. Права на треки принадлежат авторам. Вкус хранится только на этом устройстве.
+          Nocturne 0.4 — плеер для вашей музыки из SoundCloud. Треки играют через официальный встраиваемый плеер SoundCloud;
+          права принадлежат авторам. Библиотека и вкус хранятся только на этом устройстве.
         </p>
       )}
-      {done && <div className="toast glass">{done}</div>}
+      {done && <div className="toast">{done}</div>}
     </div>
   );
 }

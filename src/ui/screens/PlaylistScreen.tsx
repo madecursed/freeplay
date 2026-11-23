@@ -3,6 +3,8 @@ import type { Track } from '../../types';
 import { player } from '../../player/player';
 import { recommend } from '../../recommend/recommend';
 import { deletePlaylist, getLiked, getPlaylists } from '../../storage/store';
+import { importLink } from '../../sync/scSync';
+import { useState } from 'react';
 import { nav, type Page } from '../navigation';
 import { fmtTotal, tracksWord, useAsync, usePlayer, useStore } from '../hooks';
 import { Cover } from '../components/Cover';
@@ -32,6 +34,9 @@ export function PlaylistScreen({ page }: Props) {
   }
   const total = tracks.reduce((s, t) => s + t.duration, 0);
   const { queue, index, playing } = usePlayer();
+  const [syncing, setSyncing] = useState(false);
+  const pl = page.kind === 'playlist' ? playlists.find((p) => p.id === page.id) : undefined;
+  const sync = async () => { if (!pl?.sourceUrl) return; setSyncing(true); try { await importLink(pl.sourceUrl); } catch { alert('Не удалось обновить — проверьте интернет'); } finally { setSyncing(false); } };
   const isThisPlaying = playing && tracks.some((t) => t.id === queue[index]?.id);
 
   // автозапуск для настроения
@@ -46,6 +51,7 @@ export function PlaylistScreen({ page }: Props) {
         <button className="icon-btn" onClick={nav.pop}><Icon name="back" /></button>
         <div className="row">
           {page.kind === 'mix' && !page.load && <button className="icon-btn" onClick={mix.reload}><Icon name="refresh" /></button>}
+          {pl?.sourceUrl && <button className="icon-btn" title="Обновить из SoundCloud" onClick={sync}>{syncing ? <span className="spinner" /> : <Icon name="refresh" />}</button>}
           {page.kind === 'playlist' && page.id !== 'liked' && (
             <button className="icon-btn" onClick={() => { if (confirm(`Удалить плейлист «${title}»?`)) { deletePlaylist(page.id); nav.pop(); } }}><Icon name="trash" /></button>
           )}
@@ -72,7 +78,7 @@ export function PlaylistScreen({ page }: Props) {
 
       {mix.error ? <p className="empty">Не удалось загрузить. <button className="link" onClick={mix.reload}>Повторить</button></p>
         : <TrackList tracks={tracks} playlistId={page.kind === 'playlist' ? page.id : undefined}
-            empty={page.kind === 'playlist' ? 'Добавляйте треки через ⋯ → «Добавить в плейлист»' : mix.loading ? '' : 'Ничего не нашлось'} />}
+            empty={page.kind === 'playlist' ? 'Добавляйте треки через ⋯ → «Добавить в плейлист»' : mix.loading ? '' : 'В библиотеке пока нет подходящих треков — импортируйте больше плейлистов'} />}
     </div>
   );
 }

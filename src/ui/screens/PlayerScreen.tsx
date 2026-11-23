@@ -1,8 +1,9 @@
+import { useState } from 'react';
 import { player } from '../../player/player';
 import { record, SIGNAL } from '../../recommend/profile';
 import { isLiked, toggleLike } from '../../storage/store';
 import { nav, useNav } from '../navigation';
-import { fmt, usePlayer, useStore } from '../hooks';
+import { fmt, usePlayer, useProgress, useStore } from '../hooks';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
 
@@ -12,16 +13,22 @@ export function PlayerScreen() {
   const s = usePlayer();
   const t = s.queue[s.index];
   const liked = useStore(() => (t ? isLiked(t.id) : false));
+  const [showWidget, setShowWidget] = useState(false);
   if (!playerOpen || !t) return null;
   const next = s.queue[s.index + 1];
-  const pct = (s.time / (s.duration || 1)) * 100;
+
+  const toggleWidget = () => {
+    document.getElementById('sc-host')?.classList.toggle('is-visible', !showWidget);
+    setShowWidget(!showWidget);
+  };
+  const close = () => { document.getElementById('sc-host')?.classList.remove('is-visible'); setShowWidget(false); nav.openPlayer(false); };
 
   return (
     <div className="player-screen">
       {t.artwork && <div className="player-bg" style={{ backgroundImage: `url(${t.artwork})` }} />}
       <div className="player-glow" />
       <header className="player-head">
-        <button className="icon-btn" onClick={() => nav.openPlayer(false)}><Icon name="down" size={26} /></button>
+        <button className="icon-btn" onClick={close}><Icon name="down" size={26} /></button>
         <Icon name="sparkle" size={16} className="accent" />
         <button className="icon-btn" onClick={() => nav.openSheet(t)}><Icon name="more" /></button>
       </header>
@@ -38,16 +45,14 @@ export function PlayerScreen() {
         </button>
       </div>
 
-      <input className="seek" type="range" min={0} max={s.duration || 0} step={1} value={s.time}
-        style={{ ['--p' as string]: `${pct}%` }} onChange={(e) => player.seek(+e.target.value)} />
-      <div className="times"><span>{fmt(s.time)}</span><span>{fmt(s.duration)}</span></div>
+      <Seek duration={s.duration} />
       {s.error && <p className="err">{s.error}</p>}
 
       <div className="controls">
         <button className={`icon-btn ${s.shuffle ? 'is-on' : ''}`} onClick={player.toggleShuffle}><Icon name="shuffle" /></button>
         <button className="icon-btn" onClick={player.prev}><Icon name="prev" size={28} /></button>
         <button className="play-btn huge" onClick={player.toggle}>
-          {s.loading ? <span className="spinner" /> : <Icon name={s.playing ? 'pause' : 'play'} size={30} />}
+          <Icon name={s.playing ? 'pause' : 'play'} size={30} />
         </button>
         <button className="icon-btn" onClick={player.next}><Icon name="next" size={28} /></button>
         <button className={`icon-btn ${s.repeat !== 'off' ? 'is-on' : ''}`} onClick={player.cycleRepeat}>
@@ -55,17 +60,29 @@ export function PlayerScreen() {
         </button>
       </div>
 
-      {t.embed ? (
-        <div className="sc-slot"><p className="hint">Играет через официальный плеер SoundCloud. Если трек не запустился — нажмите ▶ в плеере ниже.</p></div>
-      ) : (
-      <div className="player-foot">
-        <button className={`chip ${s.autoRadio ? 'is-on' : ''}`} onClick={() => player.setAutoRadio(!s.autoRadio)}>Автомикс</button>
-        <div className="up-next glass">
-          <span className="bars on"><i /><i /><i /></span>
-          Далее: {next ? `${next.title} — ${next.artist}` : s.autoRadio ? 'подберу похожее' : '—'}
+      <div className={`player-foot ${showWidget ? 'with-widget' : ''}`}>
+        <div className="up-next">
+          <span className={`bars ${s.playing ? 'on' : ''}`}><i /><i /><i /></span>
+          Далее: {next ? `${next.title} — ${next.artist}` : s.autoRadio ? 'подберу из библиотеки' : '—'}
+        </div>
+        <div className="row small-links">
+          <button className={`chip ${s.autoRadio ? 'is-on' : ''}`} onClick={() => player.setAutoRadio(!s.autoRadio)}>Автомикс</button>
+          {t.embed && <button className="chip" onClick={toggleWidget}>{showWidget ? 'Скрыть плеер SoundCloud' : 'Не играет?'}</button>}
+          {t.permalink && <a className="chip" href={t.permalink} target="_blank" rel="noreferrer">SoundCloud ↗</a>}
         </div>
       </div>
-      )}
     </div>
+  );
+}
+
+function Seek({ duration }: { duration: number }) {
+  const time = useProgress();
+  const pct = duration ? Math.min(100, (time / duration) * 100) : 0;
+  return (
+    <>
+      <input className="seek" type="range" min={0} max={duration || 0} step={1} value={Math.min(time, duration || 0)}
+        style={{ ['--p' as string]: `${pct}%` }} onChange={(e) => player.seek(+e.target.value)} />
+      <div className="times"><span>{fmt(time)}</span><span>{fmt(duration)}</span></div>
+    </>
   );
 }

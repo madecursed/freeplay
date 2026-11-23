@@ -10,15 +10,18 @@ export interface Settings {
   jamendoId: string;
   /** Адрес прокси SoundCloud API — только для подписки Pro (перекрывает VITE_SOUNDCLOUD_PROXY). */
   scProxy: string;
+  /** Профиль SoundCloud пользователя (soundcloud.com/ник) — для импорта лайков и треков. */
+  scProfile: string;
 }
 
-const VERSION = 2;
-const DEFAULTS: Settings = { v: VERSION, name: 'Слушатель', sources: ['jamendo', 'archive'], jamendoId: '', scProxy: '' };
+// v3: приложение работает только с SoundCloud — каталожные источники выключены (код оставлен)
+const VERSION = 3;
+const DEFAULTS: Settings = { v: VERSION, name: 'Слушатель', sources: [], jamendoId: '', scProxy: '', scProfile: '' };
 
 function init(): Settings {
   const saved = load<Partial<Settings>>('nc.settings', {});
-  // v1 по умолчанию выбирал SoundCloud API, которому нужна подписка — сбрасываем выбор источников
-  if (saved.v !== VERSION) return { ...DEFAULTS, name: saved.name ?? DEFAULTS.name, scProxy: saved.scProxy ?? '' };
+    // при смене версии сбрасываем только выбор источников
+  if (saved.v !== VERSION) return { ...DEFAULTS, ...saved, v: VERSION, sources: DEFAULTS.sources };
   return { ...DEFAULTS, ...saved };
 }
 
@@ -35,7 +38,6 @@ export function updateSettings(patch: Partial<Settings>) {
 
 export function toggleSource(id: SourceId) {
   const has = settings.sources.includes(id);
-  if (has && settings.sources.length === 1) return; // хотя бы один источник
   updateSettings({ sources: has ? settings.sources.filter((s) => s !== id) : [...settings.sources, id] });
 }
 

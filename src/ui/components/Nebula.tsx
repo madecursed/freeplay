@@ -1,12 +1,4 @@
-/** Фон всего приложения: туманность, свечение, зерно, редкие звёзды. */
+/** Фон приложения: статичные градиенты без размытия и наложений — дёшево для iPhone. */
 export function Nebula() {
-  return (
-    <div className="nebula" aria-hidden>
-      <div className="nebula-glow a" />
-      <div className="nebula-glow b" />
-      <div className="nebula-glow c" />
-      <div className="nebula-stars" />
-      <div className="nebula-grain" />
-    </div>
-  );
+  return <div className="nebula" aria-hidden><div className="nebula-stars" /></div>;
 }

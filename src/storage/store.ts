@@ -44,8 +44,8 @@ let playlists: Playlist[] = load('nc.playlists', []);
 const savePl = () => { save('nc.playlists', playlists); emit(); };
 export const getPlaylists = () => playlists;
 export const getPlaylist = (id: string) => playlists.find((p) => p.id === id);
-export function createPlaylist(name: string): Playlist {
-  const p: Playlist = { id: Date.now().toString(36), name: name.trim() || 'Новый плейлист', tracks: [], created: Date.now() };
+export function createPlaylist(name: string, sourceUrl?: string): Playlist {
+  const p: Playlist = { id: Date.now().toString(36) + Math.random().toString(36).slice(2, 5), name: name.trim() || 'Новый плейлист', tracks: [], created: Date.now(), sourceUrl, syncedAt: sourceUrl ? Date.now() : undefined };
   playlists = [p, ...playlists]; savePl();
   return p;
 }
@@ -84,4 +84,19 @@ export function patchTrack(id: string, patch: Partial<Track>) {
   liked = fix(liked); history = fix(history);
   playlists = playlists.map((p) => ({ ...p, tracks: fix(p.tracks) }));
   save('fp.liked', liked); save('fp.history', history); savePl();
+}
+
+export const findPlaylistBySource = (url: string) => playlists.find((p) => p.sourceUrl === url);
+
+/** Заменить треки плейлиста актуальными из источника (синхронизация). */
+export function replacePlaylistTracks(id: string, tracks: Track[]) {
+  playlists = playlists.map((p) => (p.id === id ? { ...p, tracks, syncedAt: Date.now() } : p));
+  savePl();
+}
+
+/** Вся библиотека: избранное + плейлисты + история, без повторов. */
+export function libraryTracks(): Track[] {
+  const m = new Map<string, Track>();
+  for (const t of [...liked, ...playlists.flatMap((p) => p.tracks), ...history]) if (!m.has(t.id)) m.set(t.id, t);
+  return [...m.values()];
 }

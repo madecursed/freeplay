@@ -1,6 +1,6 @@
 import { player } from '../../player/player';
 import { nav, useNav } from '../navigation';
-import { usePlayer } from '../hooks';
+import { usePlayer, useProgress } from '../hooks';
 import { Cover } from './Cover';
 import { Icon } from './Icon';
 
@@ -11,7 +11,7 @@ export function MiniPlayer() {
   const t = s.queue[s.index];
   if (!t || playerOpen) return null;
   return (
-    <div className="mini-player glass" onClick={() => nav.openPlayer()}>
+    <div className="mini-player" onClick={() => nav.openPlayer()}>
       <Cover track={t} size="sm" />
       <div className="track-meta">
         <div className="track-title">{t.title}</div>
@@ -20,7 +20,13 @@ export function MiniPlayer() {
       <button className="icon-btn" aria-label="Пауза/играть" onClick={(e) => { e.stopPropagation(); player.toggle(); }}>
         <Icon name={s.playing ? 'pause' : 'play'} size={22} />
       </button>
-      <div className="mini-progress" style={{ width: `${(s.time / (s.duration || 1)) * 100}%` }} />
+      <MiniProgress duration={s.duration} />
     </div>
   );
+}
+
+// отдельный компонент — перерисовывается только он, а не весь мини-плеер
+function MiniProgress({ duration }: { duration: number }) {
+  const time = useProgress();
+  return <div className="mini-progress" style={{ transform: `scaleX(${duration ? Math.min(1, time / duration) : 0})` }} />;
 }
