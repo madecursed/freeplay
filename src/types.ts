@@ -1,33 +1,25 @@
-export type SourceId = 'audius' | 'jamendo' | 'soundcloud' | 'archive';
+/** Nocturne работает только с SoundCloud (треки старых каталогов удаляются при запуске — storage/store.ts). */
+export type SourceId = 'soundcloud';
 
 export interface Track {
-  id: string;          // `${source}:${nativeId}` — уникален между источниками
+  id: string;          // `scw:<id трека SoundCloud>`
   source: SourceId;
   title: string;
   artist: string;
   artwork?: string;
-  duration: number;    // секунды
+  duration: number;    // секунды (0 — неизвестна, придёт при воспроизведении)
+  /** Прямая ссылка на аудио. У треков SoundCloud пустая — играет embed. */
   streamUrl: string;
   genre?: string;
   tags: string[];
-  permalink?: string;  // ссылка на оригинал
-  /** Ссылка для официального встраиваемого плеера SoundCloud (вместо streamUrl). */
+  permalink?: string;  // ссылка на трек на soundcloud.com
+  /** Ссылка для официального встраиваемого плеера SoundCloud. */
   embed?: string;
   /** ID исполнителя в SoundCloud — для рекомендаций (его лайки и новые треки). */
   artistId?: number;
   /** Дата публикации (ISO). */
   created?: string;
   plays?: number;
-}
-
-/** Единый интерфейс источника. Новый каталог = новый файл в src/sources + строка в sources/index.ts */
-export interface MusicSource {
-  id: SourceId;
-  label: string;
-  enabled(): boolean;
-  search(query: string, limit?: number): Promise<Track[]>;
-  trending(limit?: number): Promise<Track[]>;
-  byTag(tag: string, limit?: number): Promise<Track[]>;
 }
 
 export interface Playlist {

@@ -40,17 +40,6 @@ export function record(t: Track, signal: number) {
 
 export const weight = (feature: string) => (profile[feature] ? decayed(profile[feature]) : 0);
 
-/** Топ признаков заданного типа — из них строим запросы к каталогам. */
-export function top(prefix: 'genre' | 'tag' | 'artist', n: number): string[] {
-  return Object.keys(profile)
-    .filter((k) => k.startsWith(prefix + ':'))
-    .map((k) => [k.slice(prefix.length + 1), weight(k)] as const)
-    .filter(([, w]) => w > 0.5)
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, n)
-    .map(([k]) => k);
-}
-
 export const isEmpty = () => Object.keys(profile).length === 0;
 
 /** Полный сброс вкуса (из настроек). */

@@ -1,27 +1,17 @@
 import type { Track } from '../types';
-import { fromAll } from '../sources';
-import { features, isEmpty, top, weight } from './profile';
+import { features, isEmpty, weight } from './profile';
 import { getHistory, isExcluded, libraryTracks } from '../storage/store';
 import { discoveryPool } from './discovery';
 
 /**
- * Рекомендации в 2 шага:
- *  1. Кандидаты — ваша библиотека SoundCloud, найденное discovery (+ каталоги, если включены).
+ * Автомикс и миксы по настроению (подробно — docs/RECOMMENDATIONS.md, разделы 2 и 8).
+ *  1. Кандидаты — ваша библиотека + всё, что нашёл discovery (лайки и треки исполнителей, Deezer).
  *     С seedTags (настроение, микс) — только треки с подходящими жанрами/тегами.
  *  2. Ранжирование — сходство с профилем вкуса + немного новизны − недавно слушанное.
  */
 export async function recommend(limit = 30, exclude: Set<string> = new Set(), seedTags?: string[]): Promise<Track[]> {
   const candidates = new Map<string, Track>();
-
-  // библиотека + найденное в SoundCloud (лайки и новинки ваших исполнителей)
   for (const t of [...libraryTracks(), ...discoveryPool()]) if (!seedTags || matches(t, seedTags)) candidates.set(t.id, t);
-
-  // каталоги (если включены в настройках)
-  const seeds = seedTags ?? [...new Set([...top('genre', 3), ...top('tag', 3)])].slice(0, 5);
-  const queries: Promise<Track[]>[] = seeds.map((seed) => fromAll((s) => s.byTag(seed, 20)));
-  if (!seedTags) queries.push(fromAll((s) => s.trending(20)));
-  const pools = await Promise.allSettled(queries);
-  for (const p of pools) if (p.status === 'fulfilled') for (const t of p.value) candidates.set(t.id, t);
 
   const recent = new Set(getHistory().slice(0, 30).map((t) => t.id));
   const scored = [...candidates.values()]
@@ -37,6 +27,7 @@ export function matches(t: Track, tags: string[]): boolean {
   return tags.some((tag) => own.includes(tag.toLowerCase()));
 }
 
+/** Оценка трека: вкус + новизна − штраф за недавнее прослушивание. */
 export function score(t: Track, recentlyPlayed: boolean): number {
   const novelty = Math.random() * 1.2;            // исследование + перемешивание
   const penalty = recentlyPlayed ? 3 : 0;
@@ -46,7 +37,7 @@ export function score(t: Track, recentlyPlayed: boolean): number {
   return taste + novelty - penalty;
 }
 
-// Не больше 2 треков одного артиста подряд.
+// Не больше 2 треков одного исполнителя подряд.
 function diversify(tracks: Track[], limit: number): Track[] {
   const out: Track[] = [];
   const rest: Track[] = [];
