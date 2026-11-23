@@ -101,12 +101,30 @@ export const scStop = () => widget?.pause();
 export async function scResolve(url: string): Promise<{ title: string; tracks: Track[] }> {
   url = url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`;
   const SC = await loadApi();
-  const titleP = fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`)
-    .then((r) => (r.ok ? r.json() : null)).then((j) => (j?.title as string | undefined)?.replace(/ by .+$/, '')).catch(() => undefined);
+  // oEmbed разворачивает короткие ссылки on.soundcloud.com и отдаёт каноническую api-ссылку для виджета
+  const o = await fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`)
+    .then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  if (!o) throw new Error('SoundCloud не нашёл эту ссылку — проверьте, что трек или плейлист публичный');
+  const src = (o.html as string | undefined)?.match(/src="([^"]+)"/)?.[1]?.replace(/&amp;/g, '&');
+  const widgetUrl = (src && new URL(src).searchParams.get('url')) || url;
+  const title = (o.title as string | undefined)?.replace(/ by [^]+$/, '') || 'SoundCloud';
+
+  // одиночный трек — хватает данных oEmbed, виджет не нужен (длительность придёт при воспроизведении)
+  const trackId = widgetUrl.match(/api\.soundcloud\.com\/tracks\/(\d+)/)?.[1];
+  if (trackId) {
+    const pageUrl = url.includes('on.soundcloud.com') ? undefined : url.split('?')[0];
+    return {
+      title,
+      tracks: [{
+        id: `scw:${trackId}`, source: 'soundcloud', title, artist: o.author_name ?? 'SoundCloud',
+        artwork: o.thumbnail_url, duration: 0, streamUrl: '', embed: widgetUrl, tags: [], permalink: pageUrl,
+      }],
+    };
+  }
 
   const tracks = await new Promise<Track[]>((resolve, reject) => {
     const f = document.createElement('iframe');
-    f.src = widgetSrc(url, false);
+    f.src = widgetSrc(widgetUrl, false);
     f.style.cssText = 'position:fixed;left:-9999px;width:300px;height:160px;';
     document.body.appendChild(f);
     const w = SC.Widget(f);
@@ -122,6 +140,5 @@ export async function scResolve(url: string): Promise<{ title: string; tracks: T
       collect(0);
     });
   });
-  const title = (await titleP) ?? decodeURIComponent(url.split('/').filter(Boolean).pop() ?? 'SoundCloud');
   return { title, tracks };
 }
