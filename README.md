@@ -1,4 +1,4 @@
-# Freeplay
+# Nocturne
 
 Музыкальный плеер без рекламы: стриминг из легальных бесплатных каталогов (Audius, Jamendo, SoundCloud API) и собственные рекомендации. Работает как PWA, ставится на iPhone без App Store и без Mac.
 
@@ -36,7 +36,15 @@ src/
     profile.ts        профиль вкуса: веса артистов/жанров/тегов с затуханием
     recommend.ts      кандидаты → ранжирование → разнообразие
   storage/store.ts    лайки, история, дизлайки (localStorage)
-  ui/                 экраны «Для вас», «Поиск», «Библиотека», плеер
+  ui/
+    App.tsx           каркас: фон, экран, мини-плеер, таб-бар
+    navigation.ts     вкладки + стек страниц + плеер + шторка
+    screens/          SplashScreen, HomeScreen, SearchScreen, LibraryScreen,
+                      PlaylistScreen, PlayerScreen, MoodScreen, ProfileScreen
+    components/       Icon, Cover, SceneArt, TrackList, MiniPlayer, TabBar,
+                      TrackSheet, SourceChips, SourceNotice, Nebula
+  recommend/moods.ts  настроения и тематические миксы → теги
+  storage/settings.ts выбор источников (SoundCloud — основной), имя, прокси
 worker/               прокси для SoundCloud (Cloudflare Worker)
 scripts/deploy.mjs    публикация на GitHub Pages (npm run deploy)
 ```
@@ -50,7 +58,10 @@ scripts/deploy.mjs    публикация на GitHub Pages (npm run deploy)
 6. **Автомикс:** когда в очереди ≤3 трека, она дополняется рекомендациями.
 
 ## Дорожная карта
-- [ ] Плейлисты, очередь с перетаскиванием
+- [x] Плейлисты, настроения, выбор источников, дизайн Nocturne
+- [ ] Тексты песен (lrclib.net)
+- [ ] Эквалайзер (Web Audio)
+- [ ] Очередь с перетаскиванием
 - [ ] IndexedDB вместо localStorage, экспорт/импорт профиля
 - [ ] Офлайн-кэш избранного (Cache API)
 - [ ] «Похожие на этот трек» (поиск по тегам текущего трека)

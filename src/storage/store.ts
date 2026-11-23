@@ -1,21 +1,19 @@
-import type { Track } from '../types';
+import type { Playlist, Track } from '../types';
 
-// Простое локальное хранилище на телефоне. При росте данных — перейти на IndexedDB.
-function load<T>(key: string, fallback: T): T {
+// Локальное хранилище на телефоне. При росте данных — перейти на IndexedDB.
+export function load<T>(key: string, fallback: T): T {
   try { const v = localStorage.getItem(key); return v ? (JSON.parse(v) as T) : fallback; } catch { return fallback; }
 }
-function save(key: string, value: unknown) {
+export function save(key: string, value: unknown) {
   try { localStorage.setItem(key, JSON.stringify(value)); } catch { /* переполнено/приватный режим */ }
 }
 
 const listeners = new Set<() => void>();
-export const subscribeStore = (fn: () => void) => { listeners.add(fn); return () => listeners.delete(fn); };
+export const subscribeStore = (fn: () => void) => { listeners.add(fn); return () => { listeners.delete(fn); }; };
 const emit = () => listeners.forEach((fn) => fn());
 
+// ---- Избранное ----
 let liked: Track[] = load('fp.liked', []);
-let history: Track[] = load('fp.history', []);
-let disliked: string[] = load('fp.disliked', []);
-
 export const getLiked = () => liked;
 export const isLiked = (id: string) => liked.some((t) => t.id === id);
 export function toggleLike(t: Track): boolean {
@@ -25,15 +23,47 @@ export function toggleLike(t: Track): boolean {
   return !was;
 }
 
+// ---- История прослушивания ----
+let history: Track[] = load('fp.history', []);
 export const getHistory = () => history;
 export function pushHistory(t: Track) {
   history = [t, ...history.filter((x) => x.id !== t.id)].slice(0, 200);
   save('fp.history', history); emit();
 }
+export function clearHistory() { history = []; save('fp.history', history); emit(); }
 
+// ---- Дизлайки ----
+let disliked: string[] = load('fp.disliked', []);
 export const isDisliked = (id: string) => disliked.includes(id);
 export function dislike(id: string) {
   if (!disliked.includes(id)) { disliked = [...disliked, id].slice(-1000); save('fp.disliked', disliked); emit(); }
 }
 
-export { load, save };
+// ---- Плейлисты ----
+let playlists: Playlist[] = load('nc.playlists', []);
+const savePl = () => { save('nc.playlists', playlists); emit(); };
+export const getPlaylists = () => playlists;
+export const getPlaylist = (id: string) => playlists.find((p) => p.id === id);
+export function createPlaylist(name: string): Playlist {
+  const p: Playlist = { id: Date.now().toString(36), name: name.trim() || 'Новый плейлист', tracks: [], created: Date.now() };
+  playlists = [p, ...playlists]; savePl();
+  return p;
+}
+export function deletePlaylist(id: string) { playlists = playlists.filter((p) => p.id !== id); savePl(); }
+export function addToPlaylist(id: string, t: Track) {
+  playlists = playlists.map((p) => (p.id === id && !p.tracks.some((x) => x.id === t.id) ? { ...p, tracks: [...p.tracks, t] } : p));
+  savePl();
+}
+export function removeFromPlaylist(id: string, trackId: string) {
+  playlists = playlists.map((p) => (p.id === id ? { ...p, tracks: p.tracks.filter((x) => x.id !== trackId) } : p));
+  savePl();
+}
+
+// ---- Недавние поисковые запросы ----
+let searches: string[] = load('nc.searches', []);
+export const getSearches = () => searches;
+export function addSearch(q: string) {
+  searches = [q, ...searches.filter((s) => s.toLowerCase() !== q.toLowerCase())].slice(0, 8);
+  save('nc.searches', searches); emit();
+}
+export function clearSearches() { searches = []; save('nc.searches', searches); emit(); }

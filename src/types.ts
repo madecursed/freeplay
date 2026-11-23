@@ -22,3 +22,10 @@ export interface MusicSource {
   trending(limit?: number): Promise<Track[]>;
   byTag(tag: string, limit?: number): Promise<Track[]>;
 }
+
+export interface Playlist {
+  id: string;
+  name: string;
+  tracks: Track[];
+  created: number;
+}

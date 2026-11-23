@@ -1,14 +1,25 @@
-import type { MusicSource, Track } from '../types';
+import type { MusicSource, SourceId, Track } from '../types';
+import { getSettings } from '../storage/settings';
 import { audius } from './audius';
 import { jamendo } from './jamendo';
 import { soundcloud } from './soundcloud';
 
-export const ALL_SOURCES: MusicSource[] = [audius, jamendo, soundcloud];
-export const activeSources = () => ALL_SOURCES.filter((s) => s.enabled());
+export const ALL_SOURCES: MusicSource[] = [soundcloud, jamendo, audius];
+export const sourceById = (id: SourceId) => ALL_SOURCES.find((s) => s.id === id)!;
 
-/** Опрашивает все источники параллельно; упавший источник не ломает результат. */
+/**
+ * Источники, выбранные в настройках (основной — первый).
+ * Если ни один выбранный не настроен — запасной вариант из доступных, чтобы приложение не было пустым.
+ */
+export function activeSources(): { list: MusicSource[]; fallback: boolean } {
+  const chosen = getSettings().sources.map(sourceById).filter((s) => s.enabled());
+  if (chosen.length) return { list: chosen, fallback: false };
+  return { list: ALL_SOURCES.filter((s) => s.enabled()), fallback: true };
+}
+
+/** Опрашивает активные источники параллельно; упавший источник не ломает результат. */
 export async function fromAll(fn: (s: MusicSource) => Promise<Track[]>): Promise<Track[]> {
-  const results = await Promise.allSettled(activeSources().map(fn));
+  const results = await Promise.allSettled(activeSources().list.map(fn));
   const lists = results.flatMap((r) => (r.status === 'fulfilled' ? [r.value] : []));
   return interleave(lists);
 }

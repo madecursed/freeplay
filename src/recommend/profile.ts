@@ -52,3 +52,6 @@ export function top(prefix: 'genre' | 'tag' | 'artist', n: number): string[] {
 }
 
 export const isEmpty = () => Object.keys(profile).length === 0;
+
+/** Полный сброс вкуса (из настроек). */
+export function resetProfile() { profile = {}; save('fp.profile', profile); }

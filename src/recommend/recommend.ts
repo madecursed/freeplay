@@ -5,13 +5,14 @@ import { getHistory, isDisliked } from '../storage/store';
 
 /**
  * Рекомендации в 2 шага:
- *  1. Кандидаты — треки по любимым жанрам/тегам из всех источников (+ тренды для разнообразия).
+ *  1. Кандидаты — треки по любимым жанрам/тегам (или по заданным seedTags — настроение, микс)
+ *     из выбранных источников + тренды для разнообразия.
  *  2. Ранжирование — сходство с профилем + немного новизны − недавно слушанное.
  */
-export async function recommend(limit = 30, exclude: Set<string> = new Set()): Promise<Track[]> {
-  const seeds = [...top('genre', 3), ...top('tag', 3)];
-  const queries: Promise<Track[]>[] = [fromAll((s) => s.trending(20))];
-  for (const seed of [...new Set(seeds)].slice(0, 5)) queries.push(fromAll((s) => s.byTag(seed, 15)));
+export async function recommend(limit = 30, exclude: Set<string> = new Set(), seedTags?: string[]): Promise<Track[]> {
+  const seeds = seedTags ?? [...new Set([...top('genre', 3), ...top('tag', 3)])].slice(0, 5);
+  const queries: Promise<Track[]>[] = seeds.map((seed) => fromAll((s) => s.byTag(seed, 20)));
+  if (!seedTags || seeds.length === 0) queries.push(fromAll((s) => s.trending(20)));
 
   const pools = await Promise.allSettled(queries);
   const candidates = new Map<string, Track>();
@@ -35,7 +36,7 @@ export function score(t: Track, recentlyPlayed: boolean): number {
   return taste + novelty - penalty;
 }
 
-// Не больше 2 треков одного артиста подряд в выдаче.
+// Не больше 2 треков одного артиста в выдаче.
 function diversify(tracks: Track[], limit: number): Track[] {
   const perArtist = new Map<string, number>();
   const out: Track[] = [];
