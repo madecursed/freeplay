@@ -6,6 +6,8 @@ import { useAsync, useSettings, useStore } from '../hooks';
 import { Icon } from '../components/Icon';
 import { SourceChips } from '../components/SourceChips';
 import { TrackList } from '../components/TrackList';
+import { ScImport } from '../components/ScImport';
+import { isSoundCloudUrl } from '../../player/scWidget';
 
 export function SearchScreen() {
   const { sources } = useSettings();
@@ -18,7 +20,7 @@ export function SearchScreen() {
 
   // поиск с задержкой при вводе
   useEffect(() => {
-    if (!query) { setRes(null); return; }
+    if (!query || isSoundCloudUrl(query)) { setRes(null); return; }
     let alive = true;
     setBusy(true);
     fromAll((s) => s.search(query, 25)).then((r) => alive && setRes(r)).catch(() => alive && setRes([])).finally(() => alive && setBusy(false));
@@ -32,12 +34,14 @@ export function SearchScreen() {
     <div className="screen">
       <form className="search-box glass" onSubmit={(e) => { e.preventDefault(); submit(q); (document.activeElement as HTMLElement)?.blur(); }}>
         <Icon name="search" size={18} />
-        <input type="search" placeholder="Поиск музыки…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <input type="search" placeholder="Поиск или ссылка SoundCloud…" value={q} onChange={(e) => setQ(e.target.value)} />
         {q && <button type="button" className="icon-btn" onClick={() => submit('')}><Icon name="close" size={16} /></button>}
       </form>
       <SourceChips />
 
-      {query ? (
+      {isSoundCloudUrl(q) ? (
+        <ScImport key={q} initialUrl={q.trim()} onDone={() => setQ('')} />
+      ) : query ? (
         busy ? <p className="empty">Ищу…</p> : <TrackList tracks={res ?? []} empty="Ничего не найдено" />
       ) : (
         <>

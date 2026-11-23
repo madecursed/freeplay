@@ -5,11 +5,13 @@ import { nav } from '../navigation';
 import { tracksWord, useStore } from '../hooks';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
+import { ScImport } from '../components/ScImport';
 
 export function LibraryScreen() {
   const [tab, setTab] = useState<'playlists' | 'artists'>('playlists');
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
+  const [importing, setImporting] = useState(false);
   const liked = useStore(getLiked);
   const playlists = useStore(getPlaylists);
   const history = useStore(getHistory);
@@ -56,6 +58,12 @@ export function LibraryScreen() {
             <li onClick={() => setCreating(true)}>
               <div className="cover cover-md create-tile"><Icon name="plus" size={26} /></div>
               <div className="track-meta"><div className="track-title">Создать</div><div className="track-sub">плейлист</div></div>
+            </li>
+          )}
+          {importing ? <li><ScImport onDone={() => setImporting(false)} /></li> : (
+            <li onClick={() => setImporting(true)}>
+              <div className="cover cover-md create-tile sc-tile"><Icon name="cloud" size={24} /></div>
+              <div className="track-meta"><div className="track-title">Импорт из SoundCloud</div><div className="track-sub">по ссылке</div></div>
             </li>
           )}
           <li onClick={() => nav.push({ kind: 'playlist', id: 'liked' })}>

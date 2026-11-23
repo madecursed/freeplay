@@ -1,9 +1,11 @@
 import type { MusicSource, Track } from '../types';
 
-const CLIENT_ID = import.meta.env.VITE_JAMENDO_CLIENT_ID as string | undefined;
+import { getSettings } from '../storage/settings';
+const ENV_ID = import.meta.env.VITE_JAMENDO_CLIENT_ID as string | undefined;
+const clientId = () => getSettings().jamendoId || ENV_ID || '';
 
 async function get(params: Record<string, string>): Promise<Track[]> {
-  const qs = new URLSearchParams({ client_id: CLIENT_ID!, format: 'json', include: 'musicinfo', audioformat: 'mp32', ...params });
+  const qs = new URLSearchParams({ client_id: clientId(), format: 'json', include: 'musicinfo', audioformat: 'mp32', ...params });
   const res = await fetch(`https://api.jamendo.com/v3.0/tracks/?${qs}`);
   if (!res.ok) throw new Error(`Jamendo ${res.status}`);
   const json = await res.json();
@@ -30,7 +32,7 @@ function map(t: any): Track {
 export const jamendo: MusicSource = {
   id: 'jamendo',
   label: 'Jamendo',
-  enabled: () => !!CLIENT_ID,
+  enabled: () => !!clientId(),
   search: (q, limit = 20) => get({ search: q, limit: String(limit) }),
   // свежие популярные треки за неделю
   trending: (limit = 20) => get({ order: 'popularity_week', limit: String(limit) }),

@@ -1,4 +1,4 @@
-export type SourceId = 'audius' | 'jamendo' | 'soundcloud';
+export type SourceId = 'audius' | 'jamendo' | 'soundcloud' | 'archive';
 
 export interface Track {
   id: string;          // `${source}:${nativeId}` — уникален между источниками
@@ -10,7 +10,9 @@ export interface Track {
   streamUrl: string;
   genre?: string;
   tags: string[];
-  permalink?: string;  // ссылка на оригинал (обязательна для атрибуции SoundCloud)
+  permalink?: string;  // ссылка на оригинал
+  /** Ссылка для официального встраиваемого плеера SoundCloud (вместо streamUrl). */
+  embed?: string;
 }
 
 /** Единый интерфейс источника. Новый каталог = новый файл в src/sources + строка в sources/index.ts */

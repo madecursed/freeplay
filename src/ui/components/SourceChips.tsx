@@ -1,4 +1,4 @@
-import { ALL_SOURCES } from '../../sources';
+import { visibleSources } from '../../sources';
 import { toggleSource } from '../../storage/settings';
 import { useSettings } from '../hooks';
 
@@ -7,7 +7,7 @@ export function SourceChips() {
   const { sources } = useSettings();
   return (
     <div className="chips">
-      {ALL_SOURCES.map((s) => {
+      {visibleSources().map((s) => {
         const on = sources.includes(s.id);
         return (
           <button key={s.id} className={`chip ${on ? 'is-on' : ''} ${s.enabled() ? '' : 'is-off'}`} onClick={() => toggleSource(s.id)}>

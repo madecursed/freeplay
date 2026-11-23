@@ -19,7 +19,9 @@ npm run dev            # откройте адрес Network с телефона
 |---|---|---|
 | Audius | не нужен | полный стриминг, тренды, много новых релизов |
 | Jamendo | `VITE_JAMENDO_CLIENT_ID` (бесплатно, devportal.jamendo.com) | 600k+ треков CC, жанры/теги/настроение |
-| SoundCloud | прокси `VITE_SOUNDCLOUD_PROXY` | новые треки независимых артистов; лейбловые треки (30-сек превью) отфильтрованы |
+| Internet Archive | не нужен | бесплатные релизы нетлейблов (электроника, ambient, инди) |
+| SoundCloud (ссылки) | не нужен | импорт трека/плейлиста/исполнителя по ссылке, играет официальный встраиваемый плеер |
+| SoundCloud API | подписка Pro + прокси `VITE_SOUNDCLOUD_PROXY` | поиск по SoundCloud внутри приложения |
 
 **SoundCloud:** зарегистрировать приложение на soundcloud.com/you/apps → развернуть `worker/soundcloud-proxy.js` на Cloudflare Workers (бесплатно) с переменными `SC_CLIENT_ID`, `SC_CLIENT_SECRET` → адрес воркера в `VITE_SOUNDCLOUD_PROXY`. Условие SoundCloud — указывать автора и ссылку на трек (есть в полноэкранном плеере).
 

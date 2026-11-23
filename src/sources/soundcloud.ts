@@ -32,7 +32,7 @@ function map(t: any): Track {
 
 export const soundcloud: MusicSource = {
   id: 'soundcloud',
-  label: 'SoundCloud',
+  label: 'SoundCloud API',
   enabled: () => !!proxy(),
   search: (q, limit = 20) => get('/search', { q, limit: String(limit) }),
   trending: (limit = 20) => get('/search', { q: 'new', limit: String(limit) }),

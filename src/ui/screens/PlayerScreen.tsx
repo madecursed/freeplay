@@ -55,6 +55,9 @@ export function PlayerScreen() {
         </button>
       </div>
 
+      {t.embed ? (
+        <div className="sc-slot"><p className="hint">Играет через официальный плеер SoundCloud. Если трек не запустился — нажмите ▶ в плеере ниже.</p></div>
+      ) : (
       <div className="player-foot">
         <button className={`chip ${s.autoRadio ? 'is-on' : ''}`} onClick={() => player.setAutoRadio(!s.autoRadio)}>Автомикс</button>
         <div className="up-next glass">
@@ -62,6 +65,7 @@ export function PlayerScreen() {
           Далее: {next ? `${next.title} — ${next.artist}` : s.autoRadio ? 'подберу похожее' : '—'}
         </div>
       </div>
+      )}
     </div>
   );
 }

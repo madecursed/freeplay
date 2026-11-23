@@ -1,9 +1,13 @@
 import type { Track } from '../types';
 import { record, SIGNAL } from '../recommend/profile';
 import { recommend } from '../recommend/recommend';
-import { pushHistory } from '../storage/store';
+import { patchTrack, pushHistory } from '../storage/store';
+import { scPause, scPlay, scResume, scSeek, scStop, type ScHandlers } from './scWidget';
 
-/** Плеер-синглтон: очередь, фоновое воспроизведение, экран блокировки, автомикс, shuffle/repeat. */
+/**
+ * Плеер-синглтон: очередь, фоновое воспроизведение, экран блокировки, автомикс, shuffle/repeat.
+ * Два движка: <audio> для прямых ссылок и официальный виджет SoundCloud для треков с embed.
+ */
 export type Repeat = 'off' | 'all' | 'one';
 export interface PlayerState {
   queue: Track[];
@@ -26,6 +30,7 @@ let state: PlayerState = {
 };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<PlayerState>) => { state = { ...state, ...patch }; listeners.forEach((f) => f()); };
+const isEmbed = () => !!state.queue[state.index]?.embed;
 
 export const player = {
   subscribe(fn: () => void) { listeners.add(fn); return () => { listeners.delete(fn); }; },
@@ -40,10 +45,12 @@ export const player = {
   },
   playNext(t: Track) { const q = state.queue.filter((x) => x.id !== t.id); q.splice(state.index + 1, 0, t); set({ queue: q }); },
   addToQueue(t: Track) { set({ queue: [...state.queue, t] }); },
-  toggle() { if (!player.current()) return; audio.paused ? audio.play().catch(onError) : audio.pause(); },
+  play() { if (isEmbed()) scResume(); else audio.play().catch(onError); },
+  pause() { if (isEmbed()) scPause(); else audio.pause(); },
+  toggle() { if (!player.current()) return; state.playing ? player.pause() : player.play(); },
   next() { skipSignal(); advance(1, true); },
-  prev() { if (audio.currentTime > 5) audio.currentTime = 0; else advance(-1, true); },
-  seek(sec: number) { audio.currentTime = sec; },
+  prev() { if (state.time > 5) player.seek(0); else advance(-1, true); },
+  seek(sec: number) { if (isEmbed()) scSeek(sec); else audio.currentTime = sec; set({ time: sec }); },
   setAutoRadio(v: boolean) { set({ autoRadio: v }); },
   toggleShuffle() {
     const on = !state.shuffle;
@@ -64,15 +71,28 @@ function load(i: number) {
   const t = state.queue[i];
   if (!t) return;
   set({ index: i, loading: true, time: 0, duration: t.duration, error: undefined });
-  audio.src = t.streamUrl;
-  audio.play().catch(onError);
+  if (t.embed) {
+    audio.pause();
+    audio.removeAttribute('src');
+    scPlay(t.embed, sc).catch(() => set({ error: 'Плеер SoundCloud недоступен', loading: false }));
+  } else {
+    scStop();
+    audio.src = t.streamUrl;
+    audio.play().catch(onError);
+  }
   pushHistory(t);
   updateMediaSession(t);
   maybeRefill();
 }
 
+function finished() {
+  const t = player.current();
+  if (t) record(t, SIGNAL.complete);
+  advance(1);
+}
+
 async function advance(dir: number, manual = false) {
-  if (!manual && state.repeat === 'one') { audio.currentTime = 0; audio.play().catch(onError); return; }
+  if (!manual && state.repeat === 'one') { player.seek(0); player.play(); return; }
   const i = state.index + dir;
   if (i >= 0 && i < state.queue.length) return load(i);
   if (dir < 0) return;
@@ -83,7 +103,7 @@ async function advance(dir: number, manual = false) {
 // Пропуск в первые 30 сек — отрицательный сигнал для рекомендаций.
 function skipSignal() {
   const t = player.current();
-  if (t && audio.currentTime < 30) record(t, SIGNAL.skipEarly);
+  if (t && state.time < 30) record(t, SIGNAL.skipEarly);
 }
 
 let refilling = false;
@@ -102,12 +122,34 @@ function onError(e: unknown) {
   set({ error: 'Не удалось воспроизвести трек', loading: false });
 }
 
+// ---- движок <audio> ----
 audio.addEventListener('playing', () => set({ playing: true, loading: false }));
-audio.addEventListener('pause', () => set({ playing: false }));
+audio.addEventListener('pause', () => { if (!isEmbed()) set({ playing: false }); });
 audio.addEventListener('waiting', () => set({ loading: true }));
-audio.addEventListener('timeupdate', () => set({ time: audio.currentTime, duration: audio.duration || state.duration }));
-audio.addEventListener('ended', () => { const t = player.current(); if (t) record(t, SIGNAL.complete); advance(1); });
-audio.addEventListener('error', () => { set({ error: 'Трек недоступен, переключаю…' }); setTimeout(() => advance(1, true), 800); });
+audio.addEventListener('timeupdate', () => { if (!isEmbed()) set({ time: audio.currentTime, duration: audio.duration || state.duration }); });
+audio.addEventListener('ended', finished);
+audio.addEventListener('error', () => {
+  if (isEmbed() || !audio.getAttribute('src')) return;
+  set({ error: 'Трек недоступен, переключаю…' });
+  setTimeout(() => advance(1, true), 800);
+});
+
+// ---- движок виджета SoundCloud ----
+const sc: ScHandlers = {
+  onPlay: () => set({ playing: true, loading: false }),
+  onPause: () => set({ playing: false }),
+  onFinish: finished,
+  onProgress: (sec) => set({ time: sec }),
+  onMeta: (meta) => {
+    const t = player.current();
+    if (!t?.embed) return;
+    const updated = { ...t, ...meta };
+    set({ queue: state.queue.map((x, i) => (i === state.index ? updated : x)), duration: meta.duration || state.duration });
+    patchTrack(t.id, meta);
+    updateMediaSession(updated);
+  },
+  onError: () => { set({ error: 'Трек SoundCloud недоступен, переключаю…' }); setTimeout(() => advance(1, true), 800); },
+};
 
 function updateMediaSession(t: Track) {
   if (!('mediaSession' in navigator)) return;
@@ -118,9 +160,9 @@ function updateMediaSession(t: Track) {
 }
 if ('mediaSession' in navigator) {
   const ms = navigator.mediaSession;
-  ms.setActionHandler('play', () => audio.play());
-  ms.setActionHandler('pause', () => audio.pause());
+  ms.setActionHandler('play', () => player.play());
+  ms.setActionHandler('pause', () => player.pause());
   ms.setActionHandler('nexttrack', () => player.next());
   ms.setActionHandler('previoustrack', () => player.prev());
-  ms.setActionHandler('seekto', (d) => { if (d.seekTime != null) audio.currentTime = d.seekTime; });
+  ms.setActionHandler('seekto', (d) => { if (d.seekTime != null) player.seek(d.seekTime); });
 }

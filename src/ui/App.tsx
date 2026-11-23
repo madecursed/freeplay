@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useNav } from './navigation';
+import { usePlayer } from './hooks';
 import { Nebula } from './components/Nebula';
 import { TabBar } from './components/TabBar';
 import { MiniPlayer } from './components/MiniPlayer';
@@ -16,7 +17,9 @@ import { PlayerScreen } from './screens/PlayerScreen';
 const TAB_SCREENS = { home: HomeScreen, search: SearchScreen, library: LibraryScreen, profile: ProfileScreen };
 
 export function App() {
-  const { tab, stack } = useNav();
+  const { tab, stack, playerOpen } = useNav();
+  const ps = usePlayer();
+  const scVisible = playerOpen && !!ps.queue[ps.index]?.embed;
   const [splash, setSplash] = useState(() => !sessionStorage.getItem('nc.splash'));
   const endSplash = useCallback(() => { setSplash(false); try { sessionStorage.setItem('nc.splash', '1'); } catch { /* */ } }, []);
 
@@ -33,6 +36,8 @@ export function App() {
       <MiniPlayer />
       <TabBar />
       <PlayerScreen />
+      {/* официальный плеер SoundCloud: виден в полноэкранном плеере, иначе скрыт */}
+      <div id="sc-host" className={scVisible ? 'is-visible' : ''} />
       <TrackSheet />
       {splash && <SplashScreen onDone={endSplash} />}
     </div>

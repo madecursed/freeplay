@@ -2,17 +2,21 @@ import type { MusicSource, SourceId, Track } from '../types';
 import { getSettings } from '../storage/settings';
 import { audius } from './audius';
 import { jamendo } from './jamendo';
+import { archive } from './archive';
 import { soundcloud } from './soundcloud';
 
-export const ALL_SOURCES: MusicSource[] = [soundcloud, jamendo, audius];
+export const ALL_SOURCES: MusicSource[] = [jamendo, archive, audius, soundcloud];
 export const sourceById = (id: SourceId) => ALL_SOURCES.find((s) => s.id === id)!;
+
+/** Источники, которые показываем в выборе: SoundCloud API — только если настроен прокси (подписка Pro). */
+export const visibleSources = () => ALL_SOURCES.filter((s) => s.id !== 'soundcloud' || s.enabled());
 
 /**
  * Источники, выбранные в настройках (основной — первый).
  * Если ни один выбранный не настроен — запасной вариант из доступных, чтобы приложение не было пустым.
  */
 export function activeSources(): { list: MusicSource[]; fallback: boolean } {
-  const chosen = getSettings().sources.map(sourceById).filter((s) => s.enabled());
+  const chosen = getSettings().sources.map(sourceById).filter((s) => s && s.enabled());
   if (chosen.length) return { list: chosen, fallback: false };
   return { list: ALL_SOURCES.filter((s) => s.enabled()), fallback: true };
 }

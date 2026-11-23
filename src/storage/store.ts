@@ -67,3 +67,21 @@ export function addSearch(q: string) {
   save('nc.searches', searches); emit();
 }
 export function clearSearches() { searches = []; save('nc.searches', searches); emit(); }
+
+/** Добавить сразу много треков (импорт). */
+export function addManyToPlaylist(id: string, tracks: Track[]) {
+  playlists = playlists.map((p) => {
+    if (p.id !== id) return p;
+    const have = new Set(p.tracks.map((t) => t.id));
+    return { ...p, tracks: [...p.tracks, ...tracks.filter((t) => !have.has(t.id))] };
+  });
+  savePl();
+}
+
+/** Обновить данные трека везде (виджет SoundCloud догружает название/обложку при воспроизведении). */
+export function patchTrack(id: string, patch: Partial<Track>) {
+  const fix = (list: Track[]) => list.map((t) => (t.id === id ? { ...t, ...patch } : t));
+  liked = fix(liked); history = fix(history);
+  playlists = playlists.map((p) => ({ ...p, tracks: fix(p.tracks) }));
+  save('fp.liked', liked); save('fp.history', history); savePl();
+}

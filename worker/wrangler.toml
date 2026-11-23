@@ -1,0 +1,7 @@
+name = "nocturne-sc-proxy"
+main = "soundcloud-proxy.js"
+compatibility_date = "2024-11-01"
+
+# Секреты задаются командой (не хранятся в git):
+#   npx wrangler@3.90.0 secret put SC_CLIENT_ID
+#   npx wrangler@3.90.0 secret put SC_CLIENT_SECRET
