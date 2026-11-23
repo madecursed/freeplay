@@ -13,6 +13,11 @@ export interface Track {
   permalink?: string;  // ссылка на оригинал
   /** Ссылка для официального встраиваемого плеера SoundCloud (вместо streamUrl). */
   embed?: string;
+  /** ID исполнителя в SoundCloud — для рекомендаций (его лайки и новые треки). */
+  artistId?: number;
+  /** Дата публикации (ISO). */
+  created?: string;
+  plays?: number;
 }
 
 /** Единый интерфейс источника. Новый каталог = новый файл в src/sources + строка в sources/index.ts */

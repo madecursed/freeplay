@@ -285,3 +285,18 @@ small.block { display: block; color: var(--muted); font-size: 12px; margin-top: 
 .up-next { background: rgba(26, 17, 42, .82); border: 1px solid var(--border); }
 .toast { background: #2a1a42; border: 1px solid var(--border); }
 .search-box { background: rgba(26, 17, 42, .82); border: 1px solid var(--border); }
+
+/* ---------- рекомендации на главной ---------- */
+.track-card { flex: 0 0 132px; text-align: left; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.track-card .card-cover { width: 132px; height: 132px; border-radius: 14px; margin-bottom: 6px; border: 1px solid var(--border); }
+.track-card span, .track-card small { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.track-card span { font-size: 14px; } .track-card small { color: var(--muted); font-size: 12.5px; }
+.track-card.is-current span { color: var(--accent); }
+.track-card:active .card-cover { transform: scale(.97); }
+.ellipsis { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.section-head .row { gap: 12px; }
+.section-head .row button { color: var(--muted); display: inline-flex; }
+.spinner.small { width: 14px; height: 14px; border-width: 1.5px; color: var(--muted); }
+.onboarding { display: flex; flex-direction: column; gap: 10px; margin-top: 22px; }
+.onboarding h2 { font-size: 18px; margin-bottom: 4px; }
+.cta svg { color: var(--accent); }

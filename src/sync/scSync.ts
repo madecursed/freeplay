@@ -3,7 +3,9 @@ import { loadSounds, scResolve, scUser } from '../player/scWidget';
 import {
   addManyToPlaylist, createPlaylist, findPlaylistBySource, getPlaylist, getPlaylists, replacePlaylistTracks,
 } from '../storage/store';
-import { getSettings, updateSettings } from '../storage/settings';
+import { updateSettings } from '../storage/settings';
+import { libraryTracks } from '../storage/store';
+import { refreshDiscovery } from '../recommend/discovery';
 
 /**
  * Импорт и автосинхронизация SoundCloud без API:
@@ -56,6 +58,7 @@ export async function importMany(text: string, onStep?: (done: number, total: nu
     try { ok.push(await importLink(u)); } catch { failed.push(u); }
   }
   onStep?.(urls.length, urls.length);
+  if (ok.length) refreshDiscovery().catch(() => {});
   return { ok, failed, total: urls.length };
 }
 
@@ -76,6 +79,7 @@ export async function connectProfile(profileUrl: string) {
     try { const p = await syncSpecial(src); results.push({ name, ok: true, count: p.tracks.length }); }
     catch { results.push({ name, ok: false }); }
   }
+  refreshDiscovery().catch(() => {});
   return { user, results };
 }
 
@@ -95,8 +99,17 @@ export async function syncAll(force = false): Promise<number> {
   return n;
 }
 
-/** Вызывается при старте приложения. */
+/**
+ * Вызывается при старте: сначала рекомендации из кэша (мгновенно), затем синхронизация плейлистов.
+ * Если у треков ещё нет ID исполнителей (импорт старой версией) — синхронизируем принудительно,
+ * чтобы рекомендациям было от чего оттолкнуться.
+ */
 export function autoSync() {
-  if (!getSettings().scProfile && !getPlaylists().some((p) => p.sourceUrl)) return;
-  setTimeout(() => syncAll().catch(() => {}), 4000); // после загрузки интерфейса
+  setTimeout(async () => {
+    const lib = libraryTracks();
+    const needIds = lib.length > 0 && !lib.some((t) => t.artistId);
+    await refreshDiscovery().catch(() => {});
+    if (getPlaylists().some((p) => p.sourceUrl)) await syncAll(needIds).catch(() => 0);
+    if (needIds) await refreshDiscovery().catch(() => {});
+  }, 2500);
 }

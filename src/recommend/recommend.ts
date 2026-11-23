@@ -2,18 +2,19 @@ import type { Track } from '../types';
 import { fromAll } from '../sources';
 import { features, isEmpty, top, weight } from './profile';
 import { getHistory, isDisliked, libraryTracks } from '../storage/store';
+import { discoveryPool } from './discovery';
 
 /**
  * Рекомендации в 2 шага:
- *  1. Кандидаты — ваша библиотека SoundCloud (+ каталоги, если включены).
+ *  1. Кандидаты — ваша библиотека SoundCloud, найденное discovery (+ каталоги, если включены).
  *     С seedTags (настроение, микс) — только треки с подходящими жанрами/тегами.
  *  2. Ранжирование — сходство с профилем вкуса + немного новизны − недавно слушанное.
  */
 export async function recommend(limit = 30, exclude: Set<string> = new Set(), seedTags?: string[]): Promise<Track[]> {
   const candidates = new Map<string, Track>();
 
-  // библиотека
-  for (const t of libraryTracks()) if (!seedTags || matches(t, seedTags)) candidates.set(t.id, t);
+  // библиотека + найденное в SoundCloud (лайки и новинки ваших исполнителей)
+  for (const t of [...libraryTracks(), ...discoveryPool()]) if (!seedTags || matches(t, seedTags)) candidates.set(t.id, t);
 
   // каталоги (если включены в настройках)
   const seeds = seedTags ?? [...new Set([...top('genre', 3), ...top('tag', 3)])].slice(0, 5);

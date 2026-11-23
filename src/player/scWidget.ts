@@ -39,6 +39,9 @@ function toTrack(s: any): Track {
     genre: s.genre || undefined,
     tags: s.genre ? [s.genre.toLowerCase(), ...tags] : tags,
     permalink: s.permalink_url,
+    artistId: s.user?.id ?? s.user_id,
+    created: s.created_at ?? s.display_date,
+    plays: s.playback_count,
   };
 }
 
@@ -65,7 +68,7 @@ function fetchMeta() {
   widget?.getCurrentSound((s: any) => {
     if (!s) return;
     const t = toTrack(s);
-    handlers.onMeta({ title: t.title, artist: t.artist, artwork: t.artwork, duration: t.duration, genre: t.genre, tags: t.tags, permalink: t.permalink });
+    handlers.onMeta({ title: t.title, artist: t.artist, artwork: t.artwork, duration: t.duration, genre: t.genre, tags: t.tags, permalink: t.permalink, artistId: t.artistId, created: t.created });
   });
 }
 

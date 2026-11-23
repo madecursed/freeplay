@@ -26,6 +26,9 @@ export function ScImport({ initialUrl = '', onDone }: { initialUrl?: string; onD
     <form className="sc-import" onSubmit={run}>
       <textarea rows={Math.min(5, Math.max(2, text.split('\n').length))} autoFocus={!initialUrl}
         placeholder={'Ссылки soundcloud.com/… — по одной на строку'} value={text} onChange={(e) => setText(e.target.value)} />
+      {!initialUrl && !msg && !busy && (
+        <p className="hint">Плейлисты профиля: в приложении SoundCloud → Библиотека → Плейлисты → откройте плейлист → «Поделиться» → «Копировать ссылку». Вставьте сюда все ссылки и нажмите «Импорт» один раз.</p>
+      )}
       <div className="sc-import-row">
         <span className="hint">{busy ? `Импорт ${step![0] + 1} из ${step![1]}…` : msg || 'Трек, плейлист или исполнитель'}</span>
         <button type="submit" className="pill" disabled={busy || !text.trim()}>{busy ? <span className="spinner" /> : <><Icon name="plus" size={16} /> Импорт</>}</button>
