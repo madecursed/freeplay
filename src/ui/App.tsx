@@ -1,5 +1,6 @@
 import { useCallback, useState } from 'react';
 import { useNav } from './navigation';
+import { useUpdateAvailable } from '../update';
 import { Nebula } from './components/Nebula';
 import { TabBar } from './components/TabBar';
 import { MiniPlayer } from './components/MiniPlayer';
@@ -17,6 +18,7 @@ const TAB_SCREENS = { home: HomeScreen, search: SearchScreen, library: LibrarySc
 
 export function App() {
   const { tab, stack } = useNav();
+  const update = useUpdateAvailable();
   const [splash, setSplash] = useState(() => { try { return !sessionStorage.getItem('nc.splash'); } catch { return false; } });
   const endSplash = useCallback(() => { setSplash(false); try { sessionStorage.setItem('nc.splash', '1'); } catch { /* */ } }, []);
 
@@ -36,6 +38,7 @@ export function App() {
       {/* официальный плеер SoundCloud — скрыт; показывается кнопкой «Не играет?» */}
       <div id="sc-host" />
       <TrackSheet />
+      {update && <button className="update-pill" onClick={() => location.reload()}>Доступна новая версия · <b>Обновить</b></button>}
       {splash && <SplashScreen onDone={endSplash} />}
     </div>
   );
