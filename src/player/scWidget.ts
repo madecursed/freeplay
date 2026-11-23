@@ -101,7 +101,7 @@ export const scStop = () => widget?.pause();
 
 // ---------- импорт по ссылке ----------
 /** Превращает ссылку SoundCloud (трек, плейлист, исполнитель) в список треков. */
-export async function scResolve(url: string): Promise<{ title: string; tracks: Track[] }> {
+export async function scResolve(url: string): Promise<{ title: string; tracks: Track[]; userId?: string }> {
   url = url.trim().startsWith('http') ? url.trim() : `https://${url.trim()}`;
   // oEmbed разворачивает короткие ссылки on.soundcloud.com и отдаёт каноническую api-ссылку для виджета
   const o = await fetch(`https://soundcloud.com/oembed?format=json&url=${encodeURIComponent(url)}`)
@@ -123,6 +123,10 @@ export async function scResolve(url: string): Promise<{ title: string; tracks: T
       }],
     };
   }
+
+  // профиль — вызывающий сам решает, что импортировать (лайки и/или треки)
+  const userId = widgetUrl.match(/api\.soundcloud\.com\/users\/(\d+)$/)?.[1];
+  if (userId) return { title: o.author_name ?? title, tracks: [], userId };
 
   return { title, tracks: await loadSounds(widgetUrl) };
 }

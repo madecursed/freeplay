@@ -18,7 +18,8 @@ export function ScImport({ initialUrl = '', onDone }: { initialUrl?: string; onD
     setStep(null);
     if (!r.total) return setMsg('Не нашёл ссылок soundcloud.com');
     if (r.ok.length === 1 && !r.failed.length) { onDone?.(); return nav.push({ kind: 'playlist', id: r.ok[0].id }); }
-    setMsg(`Импортировано: ${r.ok.length} из ${r.total}` + (r.failed.length ? '. Не открылись: ' + r.failed.join(', ') : ''));
+    setMsg((r.ok.length ? `Создано плейлистов: ${r.ok.length} (${r.ok.map((p) => p.name).join(', ')})` : 'Ничего не импортировано')
+      + (r.failed.length ? '. Не получилось: ' + r.failed.join('; ') : ''));
     if (r.ok.length) { setText(''); onDone?.(); }
   };
 

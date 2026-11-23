@@ -43,10 +43,33 @@ async function importInto(sourceUrl: string, name: string, load: () => Promise<T
 
 /** Импорт одной ссылки. Повторный импорт той же ссылки обновляет существующий плейлист. */
 export async function importLink(url: string): Promise<Playlist> {
-  if (url.startsWith('sc-likes:') || url.startsWith('sc-user:')) return syncSpecial(url);
+  return (await importAny(url))[0];
+}
+
+/**
+ * Импорт ссылки любого типа. Ссылка на профиль даёт до двух плейлистов:
+ * лайки пользователя и его собственные треки (пустые пропускаются).
+ */
+export async function importAny(url: string): Promise<Playlist[]> {
+  if (url.startsWith('sc-likes:') || url.startsWith('sc-user:')) return [await syncSpecial(url)];
   const src = normalize(url);
   const r = await scResolve(src);
-  return importInto(src, r.title, async () => r.tracks);
+  if (r.userId) return importUser(r.userId, r.title);
+  return [await importInto(src, r.title, async () => r.tracks)];
+}
+
+async function importUser(id: string, name: string): Promise<Playlist[]> {
+  const jobs = [
+    { src: `sc-likes:${id}`, title: `Лайки — ${name}`, url: `https://api.soundcloud.com/users/${id}/favorites` },
+    { src: `sc-user:${id}`, title: `Треки — ${name}`, url: `https://api.soundcloud.com/users/${id}` },
+  ];
+  const out: Playlist[] = [];
+  for (const job of jobs) {
+    const tracks = await loadSounds(job.url).catch(() => [] as Track[]);
+    if (tracks.length) out.push(await importInto(job.src, job.title, async () => tracks));
+  }
+  if (!out.length) throw new Error(`У профиля «${name}» нет публичных треков и лайков`);
+  return out;
 }
 
 /** Импорт нескольких ссылок (через пробел/перенос строки). */
@@ -55,7 +78,7 @@ export async function importMany(text: string, onStep?: (done: number, total: nu
   const ok: Playlist[] = [], failed: string[] = [];
   for (const [i, u] of urls.entries()) {
     onStep?.(i, urls.length);
-    try { ok.push(await importLink(u)); } catch { failed.push(u); }
+    try { ok.push(...(await importAny(u))); } catch (e) { failed.push(`${u} — ${(e as Error).message || 'ошибка'}`); }
   }
   onStep?.(urls.length, urls.length);
   if (ok.length) refreshDiscovery().catch(() => {});
