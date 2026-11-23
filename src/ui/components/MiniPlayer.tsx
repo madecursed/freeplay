@@ -18,7 +18,7 @@ export function MiniPlayer() {
         <div className="track-sub">{t.artist}</div>
       </div>
       <button className="icon-btn" aria-label="Пауза/играть" onClick={(e) => { e.stopPropagation(); player.toggle(); }}>
-        <Icon name={s.playing ? 'pause' : 'play'} size={22} />
+        {s.loading ? <span className="spinner small" /> : <Icon name={s.playing ? 'pause' : 'play'} size={22} />}
       </button>
       <MiniProgress duration={s.duration} />
     </div>

@@ -1,4 +1,6 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import { useSettings } from './hooks';
+import { preloadArt } from './art';
 import { useNav } from './navigation';
 import { useUpdateAvailable } from '../update';
 import { Nebula } from './components/Nebula';
@@ -19,6 +21,10 @@ const TAB_SCREENS = { home: HomeScreen, search: SearchScreen, library: LibrarySc
 export function App() {
   const { tab, stack } = useNav();
   const update = useUpdateAvailable();
+  const { coverStyle } = useSettings();
+  // фиолетовые обложки — класс на <html>, стили в styles.css
+  useEffect(() => { document.documentElement.classList.toggle('duo', coverStyle === 'nocturne'); }, [coverStyle]);
+  useEffect(preloadArt, []);
   const [splash, setSplash] = useState(() => { try { return !sessionStorage.getItem('nc.splash'); } catch { return false; } });
   const endSplash = useCallback(() => { setSplash(false); try { sessionStorage.setItem('nc.splash', '1'); } catch { /* */ } }, []);
 
@@ -31,6 +37,7 @@ export function App() {
   return (
     <div className="app">
       <Nebula />
+      <div className="grain" aria-hidden />
       <main>{content}</main>
       <MiniPlayer />
       <TabBar />

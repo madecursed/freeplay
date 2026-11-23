@@ -1,17 +1,16 @@
 import type { Track } from '../../types';
-import { SceneArt } from './SceneArt';
+import { artFor } from '../art';
 
 /**
- * Обложка с лёгкой фиолетовой подкраской.
- * Нарисованная сцена — только когда картинки нет и обложка крупная (SVG дорогой для длинных списков).
+ * Обложка. Нет картинки у трека — подставляем атмосферное фото (стабильно для трека).
+ * В режиме «обложки в стиле Nocturne» картинки тонируются в фиолетовый (класс .duo на <html>).
  */
-export function Cover({ track, src, size = 'md', hue, className = '' }: { track?: Track; src?: string; size?: 'sm' | 'md' | 'lg' | 'xl'; hue?: number; className?: string }) {
-  const img = src ?? track?.artwork;
-  const seed = track ? [...track.id].reduce((a, c) => a + c.charCodeAt(0), 0) % 50 : 3;
+export function Cover({ track, src, size = 'md', className = '' }: { track?: Track; src?: string; size?: 'sm' | 'md' | 'lg' | 'xl'; hue?: number; className?: string }) {
+  const img = src ?? track?.artwork ?? artFor(track?.id ?? 'empty');
   return (
     <div className={`cover cover-${size} ${className}`}>
-      {!img && size !== 'sm' && <SceneArt hue={hue ?? 255 + (seed % 5) * 10} seed={seed} />}
-      {img && <img src={img} alt="" loading="lazy" decoding="async" onError={(e) => (e.currentTarget.style.display = 'none')} />}
+      <img src={img} alt="" loading="lazy" decoding="async"
+        onError={(e) => { const el = e.currentTarget; const fb = artFor(track?.id ?? img); if (!el.src.endsWith(fb)) el.src = fb; }} />
     </div>
   );
 }

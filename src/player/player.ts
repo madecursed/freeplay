@@ -2,7 +2,7 @@ import type { Track } from '../types';
 import { record, SIGNAL } from '../recommend/profile';
 import { recommend } from '../recommend/recommend';
 import { patchTrack, pushHistory } from '../storage/store';
-import { scPause, scPlay, scResume, scSeek, scStop, type ScHandlers } from './scWidget';
+import { revealWidget, scPause, scPlay, scPreload, scResume, scSeek, scStop, type ScHandlers } from './scWidget';
 
 /**
  * Плеер-синглтон: очередь, фоновое воспроизведение, экран блокировки, автомикс, shuffle/repeat.
@@ -18,6 +18,8 @@ export interface PlayerState {
   autoRadio: boolean;
   shuffle: boolean;
   repeat: Repeat;
+  /** Виджет не смог стартовать сам — нужно нажатие. */
+  stuck: boolean;
   error?: string;
 }
 
@@ -25,7 +27,7 @@ const audio = new Audio();
 audio.preload = 'auto';
 let state: PlayerState = {
   queue: [], index: -1, playing: false, loading: false, duration: 0,
-  autoRadio: true, shuffle: false, repeat: 'off',
+  autoRadio: true, shuffle: false, repeat: 'off', stuck: false,
 };
 const listeners = new Set<() => void>();
 const set = (patch: Partial<PlayerState>) => { state = { ...state, ...patch }; listeners.forEach((f) => f()); };
@@ -60,9 +62,16 @@ export const player = {
     set({ queue: q, index: -1 });
     load(start);
   },
-  playNext(t: Track) { const q = state.queue.filter((x) => x.id !== t.id); q.splice(state.index + 1, 0, t); set({ queue: q }); },
-  addToQueue(t: Track) { set({ queue: [...state.queue, t] }); },
-  play() { set({ playing: true }); if (isEmbed()) scResume(); else audio.play().catch(onError); },
+  playNext(t: Track) { const q = state.queue.filter((x) => x.id !== t.id); q.splice(state.index + 1, 0, t); set({ queue: q }); preloadNext(); },
+  addToQueue(t: Track) { set({ queue: [...state.queue, t] }); preloadNext(); },
+  play() {
+    set({ playing: true });
+    if (!isEmbed()) { audio.play().catch(onError); return; }
+    scResume();
+    // нажали ▶ на застрявшем треке, а он всё равно молчит — показываем плеер SoundCloud:
+    // на iPhone одно нажатие внутри него разблокирует звук
+    if (state.stuck) setTimeout(() => { if (state.stuck) { revealWidget(true); autoRevealed = true; } }, 1800);
+  },
   pause() { set({ playing: false }); if (isEmbed()) scPause(); else audio.pause(); },
   toggle() { if (!player.current()) return; state.playing ? player.pause() : player.play(); },
   next() { skipSignal(); advance(1, true); },
@@ -74,6 +83,7 @@ export const player = {
     // перемешиваем только то, что ещё не играло
     const q = on ? [...state.queue.slice(0, state.index + 1), ...shuffled(state.queue.slice(state.index + 1))] : state.queue;
     set({ shuffle: on, queue: q });
+    preloadNext();
   },
   cycleRepeat() { set({ repeat: state.repeat === 'off' ? 'all' : state.repeat === 'all' ? 'one' : 'off' }); },
 };
@@ -87,12 +97,13 @@ function shuffled<T>(a: T[]): T[] {
 function load(i: number) {
   const t = state.queue[i];
   if (!t) return;
-  set({ index: i, loading: true, playing: true, duration: t.duration, error: undefined });
+  // «играет» ставим только когда трек реально пошёл (событие PLAY/playing), иначе кнопка врёт
+  set({ index: i, loading: true, playing: false, stuck: false, duration: t.duration, error: undefined });
   setTime(0, true);
   if (t.embed) {
     audio.pause();
     audio.removeAttribute('src');
-    scPlay(t.embed, sc).catch(() => set({ error: 'Плеер SoundCloud недоступен', loading: false }));
+    scPlay(t.embed, sc);
   } else {
     scStop();
     audio.src = t.streamUrl;
@@ -131,6 +142,7 @@ async function refill() {
   try {
     const more = await recommend(15, new Set(state.queue.map((t) => t.id)));
     set({ queue: [...state.queue, ...more] });
+    preloadNext();
   } finally { refilling = false; }
 }
 function maybeRefill() { if (state.autoRadio && state.repeat === 'off' && state.queue.length - state.index <= 3) refill(); }
@@ -154,11 +166,25 @@ audio.addEventListener('error', () => {
 });
 
 // ---- движок виджета SoundCloud ----
+let autoRevealed = false;
+/** Следующий трек заранее грузится в запасной плеер — переключение будет мгновенным. */
+let preloadTimer = 0;
+function preloadNext() {
+  clearTimeout(preloadTimer);
+  preloadTimer = window.setTimeout(() => scPreload(state.queue[state.index + 1]?.embed), 1500);
+}
+
+function started() {
+  preloadNext();
+  set({ playing: true, loading: false, stuck: false });
+  if (autoRevealed) { revealWidget(false); autoRevealed = false; }
+}
 const sc: ScHandlers = {
-  onPlay: () => set({ playing: true, loading: false }),
-  onPause: () => set({ playing: false }),
+  onPlay: started,
+  onPause: () => { if (!state.loading) set({ playing: false }); }, // пауза старого трека при смене — не сигнал
   onFinish: finished,
-  onProgress: (sec) => setTime(sec),
+  onProgress: (sec) => { setTime(sec); if (!state.playing || state.loading || state.stuck) started(); },
+  onStuck: () => set({ playing: false, loading: false, stuck: true }),
   onMeta: (meta) => {
     const t = player.current();
     if (!t?.embed) return;

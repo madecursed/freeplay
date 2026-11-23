@@ -7,7 +7,7 @@ import { importLink } from '../../sync/scSync';
 import { nav, type Page } from '../navigation';
 import { fmtTotal, tracksWord, useAsync, usePlayer, useStore } from '../hooks';
 import { Icon } from '../components/Icon';
-import { SceneArt } from '../components/SceneArt';
+import { artFor } from '../art';
 import { TrackList } from '../components/TrackList';
 
 type Props = { page: Extract<Page, { kind: 'playlist' | 'mix' }> };
@@ -34,7 +34,7 @@ export function PlaylistScreen({ page }: Props) {
     tracks = mix.data ?? [];
   }
   const total = tracks.reduce((s, t) => s + t.duration, 0);
-  const cover = (page.kind === 'mix' && page.cover) || tracks.find((t) => t.artwork)?.artwork;
+  const cover = (page.kind === 'mix' && page.cover) || tracks.find((t) => t.artwork)?.artwork || artFor(title);
   const isThisPlaying = playing && tracks.some((t) => t.id === queue[index]?.id);
   const saved = !!savedId && playlists.some((p) => p.id === savedId);
 
@@ -60,7 +60,7 @@ export function PlaylistScreen({ page }: Props) {
   return (
     <div className="screen playlist-screen">
       <div className="pl-cover">
-        {cover ? <img src={cover} alt="" /> : <SceneArt hue={hue} seed={title.length} />}
+        <img src={cover} alt="" />
         <div className="pl-cover-fade" />
         <header className="pl-top">
           <button className="icon-btn" aria-label="Назад" onClick={nav.pop}><Icon name="back" /></button>
@@ -74,7 +74,7 @@ export function PlaylistScreen({ page }: Props) {
         </header>
         <div className="pl-head">
           <div className="pl-head-text">
-            <h1>{title}{subtitle && <span className="pl-sub"> {subtitle}</span>}</h1>
+            <h1 className="clamp-2">{title}{subtitle && <span className="pl-sub"> {subtitle}</span>}</h1>
             <p>{mix.loading && page.kind === 'mix' ? 'Подбираю…' : `${tracksWord(tracks.length)} · ${fmtTotal(total)}`}</p>
           </div>
           <button className="orb small" disabled={!tracks.length} aria-label="Играть"

@@ -12,11 +12,13 @@ export interface Settings {
   scProxy: string;
   /** Профиль SoundCloud пользователя (soundcloud.com/ник) — для импорта лайков и треков. */
   scProfile: string;
+  /** Обложки: фиолетовые в стиле Nocturne или оригинальные. */
+  coverStyle: 'nocturne' | 'original';
 }
 
 // v3: приложение работает только с SoundCloud — каталожные источники выключены (код оставлен)
 const VERSION = 3;
-const DEFAULTS: Settings = { v: VERSION, name: 'Слушатель', sources: [], jamendoId: '', scProxy: '', scProfile: '' };
+const DEFAULTS: Settings = { v: VERSION, name: 'Слушатель', sources: [], jamendoId: '', scProxy: '', scProfile: '', coverStyle: 'nocturne' };
 
 function init(): Settings {
   const saved = load<Partial<Settings>>('nc.settings', {});

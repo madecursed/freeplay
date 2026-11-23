@@ -4,10 +4,10 @@ import { clearHistory, getPlaylists } from '../../storage/store';
 import { updateSettings } from '../../storage/settings';
 import { connectProfile, syncAll, type ProfileStep } from '../../sync/scSync';
 import { useSettings, useStore } from '../hooks';
+import { ART } from '../art';
 import { Icon } from '../components/Icon';
-import { SceneArt } from '../components/SceneArt';
 
-/** Профиль: подключение SoundCloud, синхронизация, настройки. */
+/** Профиль и настройки (референс, экран «Настройки»): фото луны над лесом, аватар, пункты с иконками. */
 export function ProfileScreen() {
   const st = useSettings();
   const playlists = useStore(getPlaylists);
@@ -16,9 +16,10 @@ export function ProfileScreen() {
   const [profile, setProfile] = useState(st.scProfile);
   const [busy, setBusy] = useState<'' | 'connect' | 'sync'>('');
   const [report, setReport] = useState('');
-  const [about, setAbout] = useState(false);
+  const [open, setOpen] = useState<'' | 'about' | 'look'>('');
   const [done, setDone] = useState('');
   const flash = (msg: string) => { setDone(msg); setTimeout(() => setDone(''), 2200); };
+  const toggle = (k: 'about' | 'look') => setOpen(open === k ? '' : k);
 
   const connect = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -31,8 +32,7 @@ export function ProfileScreen() {
       : `${s.name}: SoundCloud не ответил`;
     try {
       const r = await connectProfile(profile, (steps) => setReport(steps.map(label).join(' · ')));
-      setProfile(st.scProfile || profile);
-      const ok = r.steps.filter((s) => s.state === 'ok').length;
+      const ok = r.steps.some((s) => s.state === 'ok');
       setReport(`${r.user.name} — ` + r.steps.map(label).join(' · ') + (ok ? '. Плейлисты в Библиотеке.' : ''));
     } catch (x) { setReport((x as Error).message); } finally { setBusy(''); }
   };
@@ -44,17 +44,40 @@ export function ProfileScreen() {
   };
 
   return (
-    <div className="screen">
-      <div className="profile-bg"><SceneArt hue={268} seed={21} /></div>
+    <div className="screen profile-screen">
+      <div className="profile-photo"><img src={ART.profile} alt="" /></div>
       <header className="screen-head"><h1>Настройки</h1><Icon name="sparkle" size={18} className="accent" /></header>
 
       <div className="profile-card">
         <div className="avatar big">{st.name.slice(0, 1).toUpperCase()}</div>
-        <div>
-          <input className="name-input" value={st.name} onChange={(e) => updateSettings({ name: e.target.value })} />
-          <div className="track-sub">Профиль</div>
+        <div className="track-meta">
+          <input className="name-input" value={st.name} aria-label="Имя" onChange={(e) => updateSettings({ name: e.target.value })} />
+          <div className="track-sub">{st.scProfile ? st.scProfile.replace('https://', '') : 'Профиль'}</div>
         </div>
       </div>
+
+      <ul className="settings-list">
+        <li onClick={() => toggle('look')}><Icon name="edit" /><span>Оформление</span><Icon name={open === 'look' ? 'down' : 'chevron'} size={16} /></li>
+        {open === 'look' && (
+          <li className="col">
+            <label>Обложки треков</label>
+            <div className="segmented small">
+              <button className={st.coverStyle === 'nocturne' ? 'is-on' : ''} onClick={() => updateSettings({ coverStyle: 'nocturne' })}>В стиле Nocturne</button>
+              <button className={st.coverStyle === 'original' ? 'is-on' : ''} onClick={() => updateSettings({ coverStyle: 'original' })}>Оригинальные</button>
+            </div>
+          </li>
+        )}
+        <li className="is-disabled"><Icon name="sliders" /><span>Эквалайзер</span><small>скоро</small></li>
+        <li className="is-disabled"><Icon name="lyrics" /><span>Тексты песен</span><small>скоро</small></li>
+        <li onClick={() => toggle('about')}><Icon name="info" /><span>О приложении</span><Icon name={open === 'about' ? 'down' : 'chevron'} size={16} /></li>
+        {open === 'about' && (
+          <li className="col about">
+            <p>Nocturne 0.5 — плеер для вашей музыки из SoundCloud без рекламы. Треки играют через официальный встраиваемый плеер SoundCloud, права принадлежат авторам. Библиотека и вкус хранятся только на этом устройстве.</p>
+            <p>Фото: Wikimedia Commons (CC BY, CC BY-SA, Public domain) — AnBuKu, Robert Lamb, Humphrey Bolton, Manasij Pal Chowdhury, Rhododendrites, Vian, Brady Smith, Le085, W.carter, Joshua Tree NP, Nelizaj. Обработаны в фиолетовый дуотон.</p>
+            <a className="link" href="https://github.com/madecursed/freeplay/blob/main/docs/ART_CREDITS.md" target="_blank" rel="noreferrer">Полный список источников и лицензий →</a>
+          </li>
+        )}
+      </ul>
 
       <h3 className="settings-title">SoundCloud</h3>
       <ul className="settings-list">
@@ -74,24 +97,15 @@ export function ProfileScreen() {
           {busy === 'sync' ? <span className="spinner" /> : <Icon name="chevron" size={16} />}
         </li>
       </ul>
-      <p className="hint">Загрузка занимает до минуты. SoundCloud без API отдаёт только последние ~20 лайков — чтобы перенести все, соберите их в плейлист и импортируйте ссылкой. Плейлисты со ссылкой обновляются сами при запуске (раз в 6 часов).</p>
+      <p className="hint">Загрузка занимает до минуты. Без API SoundCloud отдаёт только последние ~20 лайков — чтобы перенести все, соберите их в плейлист и импортируйте ссылкой.</p>
 
-      <h3 className="settings-title">Приложение</h3>
+      <h3 className="settings-title">Данные</h3>
       <ul className="settings-list">
-        <li className="is-disabled"><Icon name="sliders" /><span>Эквалайзер</span><small>скоро</small></li>
-        <li className="is-disabled"><Icon name="lyrics" /><span>Тексты песен</span><small>скоро</small></li>
         <li onClick={() => { if (confirm('Сбросить рекомендации? Приложение забудет ваш вкус.')) { resetProfile(); flash('Рекомендации сброшены'); } }}>
-          <Icon name="refresh" /><span>Сбросить рекомендации</span><Icon name="chevron" size={16} />
+          <Icon name="sparkle" /><span>Сбросить рекомендации</span><Icon name="chevron" size={16} />
         </li>
         <li onClick={() => { clearHistory(); flash('История очищена'); }}><Icon name="clock" /><span>Очистить историю</span><Icon name="chevron" size={16} /></li>
-        <li onClick={() => setAbout(!about)}><Icon name="info" /><span>О приложении</span><Icon name={about ? 'down' : 'chevron'} size={16} /></li>
       </ul>
-      {about && (
-        <p className="hint">
-          Nocturne 0.4 — плеер для вашей музыки из SoundCloud. Треки играют через официальный встраиваемый плеер SoundCloud;
-          права принадлежат авторам. Библиотека и вкус хранятся только на этом устройстве.
-        </p>
-      )}
       {done && <div className="toast">{done}</div>}
     </div>
   );

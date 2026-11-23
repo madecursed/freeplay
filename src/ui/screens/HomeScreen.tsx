@@ -3,18 +3,19 @@ import { player } from '../../player/player';
 import { recommend } from '../../recommend/recommend';
 import { refreshDiscovery, useDiscovery, type RecMix } from '../../recommend/discovery';
 import { getHistory, getPlaylists, libraryTracks } from '../../storage/store';
+import type { Playlist } from '../../types';
 import { nav } from '../navigation';
-import { greeting, tracksWord, useSettings, useStore } from '../hooks';
+import { greeting, tracksWord, usePlayer, useSettings, useStore } from '../hooks';
+import { ART, artFor, mixArt } from '../art';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
-import { SceneArt } from '../components/SceneArt';
 import { TrackCards } from '../components/TrackCards';
 import { TrackList } from '../components/TrackList';
 
 const HERO = [
-  { title: ['Твоя', 'ночная волна'], hue: 270, seed: 4, action: 'wave' },
-  { title: ['Подобрать', 'по настроению'], hue: 290, seed: 9, action: 'mood' },
-  { title: ['Перенести', 'из SoundCloud'], hue: 250, seed: 17, action: 'import' },
+  { title: ['Твоя', 'ночная волна'], img: ART.hero.wave, action: 'wave' },
+  { title: ['Подобрать', 'по настроению'], img: ART.hero.mood, action: 'mood' },
+  { title: ['Перенести', 'из SoundCloud'], img: ART.hero.import, action: 'import' },
 ] as const;
 
 export function HomeScreen() {
@@ -35,7 +36,7 @@ export function HomeScreen() {
   };
 
   return (
-    <div className="screen">
+    <div className="screen home-screen">
       <header className="home-head">
         <h1 className="logo">NOCTURNE</h1>
         <div className="row">
@@ -48,7 +49,7 @@ export function HomeScreen() {
       <div className="hero-scroller" onScroll={(e) => setSlide(Math.round(e.currentTarget.scrollLeft / e.currentTarget.clientWidth))}>
         {HERO.map((h) => (
           <div key={h.action} className="hero" onClick={() => runHero(h.action)}>
-            <SceneArt hue={h.hue} seed={h.seed} className="hero-art" />
+            <img className="hero-art" src={h.img} alt="" />
             <div className="hero-text">{h.title[0]}<br />{h.title[1]}</div>
             <button className="play-btn" aria-label="Открыть">
               {busy && h.action === 'wave' ? <span className="spinner" /> : <Icon name={h.action === 'import' ? 'plus' : 'play'} size={22} />}
@@ -58,54 +59,90 @@ export function HomeScreen() {
       </div>
       <div className="dots">{HERO.map((_, i) => <i key={i} className={i === slide ? 'on' : ''} />)}</div>
 
-      {libEmpty ? (
-        <Onboarding />
-      ) : (
+      {libEmpty ? <Onboarding /> : (
         <>
-          <div className="section-head">
-            <h2>Рекомендации</h2>
-            {d.loading && !d.mixes.length && <span className="spinner small" />}
-          </div>
+          <SectionHead title="Рекомендации" loading={d.loading && !d.mixes.length} />
           {d.mixes.length ? (
             <div className="card-row">{d.mixes.map((m) => <MixCard key={m.id} mix={m} />)}</div>
           ) : <p className="empty">{d.loading ? 'Собираю плейлисты по вашему вкусу…' : 'Импортируйте пару плейлистов — здесь появятся подборки'}</p>}
 
-          <div className="section-head">
-            <h2>Для тебя</h2>
-            <div className="row">
-              {d.loading ? <span className="spinner small" /> : <button onClick={() => refreshDiscovery(true)} aria-label="Обновить"><Icon name="refresh" size={16} /></button>}
-              {d.forYou.length > 6 && <button onClick={() => nav.push({ kind: 'mix', title: 'Для тебя', subtitle: 'подборка', load: async () => d.forYou })}>Все →</button>}
-            </div>
-          </div>
-          {d.forYou.length ? <TrackList tracks={d.forYou.slice(0, 6)} />
+          <SectionHead title="Для тебя" loading={d.loading}
+            onRefresh={() => refreshDiscovery(true)}
+            onAll={d.forYou.length > 5 ? () => nav.push({ kind: 'mix', title: 'Для тебя', subtitle: 'подборка', cover: artFor('for-you'), load: async () => d.forYou }) : undefined} />
+          {d.forYou.length ? <div className="glass-list"><TrackList tracks={d.forYou.slice(0, 5)} /></div>
             : <p className="empty">{d.loading ? 'Подбираю треки по вашему вкусу…' : 'Послушайте несколько треков — подборка появится здесь'}</p>}
 
           {d.fresh.length > 0 && (<>
-            <div className="section-head"><h2>Новое от твоих артистов</h2></div>
+            <SectionHead title="Новое от твоих артистов" />
             <TrackCards tracks={d.fresh} />
           </>)}
 
-          <div className="section-head"><h2>Твои плейлисты</h2>{playlists.length > 0 && <button onClick={() => nav.setTab('library')}>Все →</button>}</div>
+          <SectionHead title="Твои плейлисты" onAll={playlists.length ? () => nav.setTab('library') : undefined} />
           {playlists.length ? (
-            <div className="card-row">
-              {playlists.slice(0, 10).map((p, i) => (
-                <button key={p.id} className="mix-card" onClick={() => nav.push({ kind: 'playlist', id: p.id })}>
-                  <div className="mix-art">{p.tracks[0]?.artwork ? <Cover track={p.tracks[0]} size="md" /> : <SceneArt hue={260 + i * 9} seed={i * 7 + 2} />}</div>
-                  <span>{p.name}</span>
-                  <small>{tracksWord(p.tracks.length)}</small>
-                </button>
-              ))}
-            </div>
+            <div className="card-row">{playlists.slice(0, 10).map((p) => <PlaylistCard key={p.id} p={p} />)}</div>
           ) : <Onboarding compact />}
 
-          <div className="section-head">
-            <h2>Недавно прослушанное</h2>
-            {history.length > 4 && <button onClick={() => nav.push({ kind: 'mix', title: 'Недавно', subtitle: 'прослушанное', load: async () => getHistory().slice(0, 50) })}>Все →</button>}
-          </div>
-          <TrackList tracks={history.slice(0, 4)} empty="Здесь появятся треки, которые вы слушали" />
+          <SectionHead title="Недавно прослушанное"
+            onAll={history.length > 3 ? () => nav.push({ kind: 'mix', title: 'Недавно', subtitle: 'прослушанное', cover: artFor('recent'), load: async () => getHistory().slice(0, 50) }) : undefined} />
+          {history.length ? <RecentList /> : <p className="empty">Здесь появятся треки, которые вы слушали</p>}
         </>
       )}
     </div>
+  );
+}
+
+function SectionHead({ title, loading, onAll, onRefresh }: { title: string; loading?: boolean; onAll?: () => void; onRefresh?: () => void }) {
+  return (
+    <div className="section-head">
+      <h2 className="clamp-1">{title}</h2>
+      <div className="row">
+        {loading ? <span className="spinner small" /> : onRefresh && <button onClick={onRefresh} aria-label="Обновить"><Icon name="refresh" size={15} /></button>}
+        {onAll && <button onClick={onAll}>Все →</button>}
+      </div>
+    </div>
+  );
+}
+
+/** «Недавно прослушанное» — стеклянная плашка, как на референсе: текущий трек с паузой. */
+function RecentList() {
+  const history = useStore(getHistory);
+  const { queue, index, playing } = usePlayer();
+  const cur = queue[index]?.id;
+  const items = history.slice(0, 3);
+  return (
+    <div className="recent">
+      {items.map((t, i) => (
+        <div key={t.id} className={`recent-row ${t.id === cur ? 'is-current' : ''}`}
+          onClick={() => (t.id === cur ? player.toggle() : player.playList(items, i))}>
+          <Cover track={t} size="sm" />
+          <div className="track-meta"><div className="track-title">{t.title}</div><div className="track-sub">{t.artist}</div></div>
+          <span className="recent-btn"><Icon name={t.id === cur && playing ? 'pause' : 'play'} size={18} /></span>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+/** Карточка рекомендованного плейлиста: атмосферное фото + две строки. */
+function MixCard({ mix }: { mix: RecMix }) {
+  const art = mixArt(mix.id);
+  return (
+    <button className="mix-card" onClick={() => nav.push({ kind: 'mix', title: mix.title, subtitle: mix.subtitle, hue: mix.hue, cover: art, load: async () => mix.tracks })}>
+      <div className="mix-art"><img src={art} alt="" loading="lazy" /><span className="mix-count">{mix.tracks.length}</span></div>
+      <span className="clamp-2">{mix.title}</span>
+      <small className="clamp-1">{mix.subtitle}</small>
+    </button>
+  );
+}
+
+function PlaylistCard({ p }: { p: Playlist }) {
+  const art = p.tracks.find((t) => t.artwork)?.artwork;
+  return (
+    <button className="mix-card" onClick={() => nav.push({ kind: 'playlist', id: p.id })}>
+      <div className="mix-art cover-like"><img src={art ?? artFor(p.id)} alt="" loading="lazy" /></div>
+      <span className="clamp-2">{p.name}</span>
+      <small className="clamp-1">{tracksWord(p.tracks.length)}</small>
+    </button>
   );
 }
 
@@ -123,17 +160,5 @@ function Onboarding({ compact }: { compact?: boolean }) {
       </button>
       {!compact && <p className="hint">Дальше Nocturne сам найдёт новое: по лайкам и релизам исполнителей, которых вы слушаете.</p>}
     </div>
-  );
-}
-
-/** Карточка рекомендованного плейлиста: обложка + две строки, как на референсе. */
-function MixCard({ mix }: { mix: RecMix }) {
-  const art = mix.tracks.find((t) => t.artwork)?.artwork;
-  return (
-    <button className="mix-card" onClick={() => nav.push({ kind: 'mix', title: mix.title, subtitle: mix.subtitle, hue: mix.hue, cover: art, load: async () => mix.tracks })}>
-      <div className="mix-art">{art ? <img src={art} alt="" loading="lazy" /> : <SceneArt hue={mix.hue} seed={mix.id.length} />}</div>
-      <span>{mix.title}</span>
-      <small className="ellipsis">{mix.subtitle}</small>
-    </button>
   );
 }

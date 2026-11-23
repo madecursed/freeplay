@@ -8,6 +8,7 @@ import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
 import { ScImport } from '../components/ScImport';
 import { TrackList } from '../components/TrackList';
+import { artFor } from '../art';
 
 type LibTab = 'playlists' | 'artists' | 'tracks';
 const TABS: [LibTab, string][] = [['playlists', 'Плейлисты'], ['artists', 'Исполнители'], ['tracks', 'Треки']];
@@ -82,7 +83,7 @@ export function LibraryScreen() {
           </li>
           {playlists.map((p) => (
             <li key={p.id} onClick={() => nav.push({ kind: 'playlist', id: p.id })}>
-              <Cover track={p.tracks.find((t) => t.artwork)} size="md" className="tile" />
+              <Cover track={p.tracks.find((t) => t.artwork)} src={p.tracks.find((t) => t.artwork) ? undefined : artFor(p.id)} size="md" className="tile" />
               <div className="track-meta">
                 <div className="track-title">{p.name}</div>
                 <div className="track-sub">{tracksWord(p.tracks.length)}{p.sourceUrl ? ' · SoundCloud' : ''}</div>

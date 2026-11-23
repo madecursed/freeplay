@@ -28,6 +28,10 @@ npm run dev            # откройте адрес Network с телефона
 ## Публикация
 `npm run deploy` — собирает проект (с ключами из `.env`) и пушит в ветку `gh-pages`. Сайт: https://madecursed.github.io/freeplay/
 
+## Документация
+- [docs/RECOMMENDATIONS.md](docs/RECOMMENDATIONS.md) — как устроен подбор музыки
+- [docs/ART_CREDITS.md](docs/ART_CREDITS.md) — источники и лицензии фото
+
 ## Структура
 ```
 src/

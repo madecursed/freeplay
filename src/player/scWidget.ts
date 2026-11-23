@@ -53,9 +53,21 @@ export interface ScHandlers {
   onProgress(sec: number): void;
   onMeta(t: Partial<Track>): void;
   onError(): void;
+  /** Виджет так и не начал играть — нужна кнопка ▶. */
+  onStuck(): void;
 }
 
-let widget: any = null;
+/**
+ * Два скрытых плеера SoundCloud: «активный» играет, «запасной» заранее загружает следующий трек.
+ *
+ * Зачем: iPhone разрешает звук в плеере SoundCloud только в ответ на нажатие. Загрузка нового трека
+ * занимает секунду-две, и к её концу нажатие «протухает» — трек молчит. Если следующий трек уже загружен
+ * в запасном плеере, при нажатии «вперёд» мы запускаем его синхронно, ещё внутри нажатия, — и звук идёт.
+ */
+interface Slot { iframe: HTMLIFrameElement; w: any; url: string; ready: boolean }
+let SC: any = null;              // Widget API, когда загружен
+let active: Slot | null = null;
+let standby: Slot | null = null;
 let handlers: ScHandlers;
 
 function host(): HTMLElement {
@@ -65,39 +77,123 @@ function host(): HTMLElement {
 }
 
 function fetchMeta() {
-  widget?.getCurrentSound((s: any) => {
+  active?.w.getCurrentSound((s: any) => {
     if (!s) return;
     const t = toTrack(s);
     handlers.onMeta({ title: t.title, artist: t.artist, artwork: t.artwork, duration: t.duration, genre: t.genre, tags: t.tags, permalink: t.permalink, artistId: t.artistId, created: t.created });
   });
 }
 
-export async function scPlay(url: string, h: ScHandlers) {
-  handlers = h;
-  const SC = await loadApi();
-  if (!widget) {
-    const iframe = document.createElement('iframe');
-    iframe.allow = 'autoplay; encrypted-media';
-    iframe.title = 'SoundCloud';
-    iframe.src = widgetSrc(url, true);
-    host().appendChild(iframe);
-    widget = SC.Widget(iframe);
-    const E = SC.Widget.Events;
-    widget.bind(E.READY, () => { widget.play(); fetchMeta(); });
-    widget.bind(E.PLAY, () => { handlers.onPlay(); fetchMeta(); });
-    widget.bind(E.PAUSE, () => handlers.onPause());
-    widget.bind(E.FINISH, () => handlers.onFinish());
-    widget.bind(E.PLAY_PROGRESS, (e: any) => handlers.onProgress(e.currentPosition / 1000));
-    widget.bind(E.ERROR, () => handlers.onError());
-  } else {
-    widget.load(url, { auto_play: true, visual: false, show_comments: false, hide_related: true, callback: () => { widget.play(); fetchMeta(); } });
-  }
+let attempt = 0;
+/** Пока активный плеер переключается на новый трек, его события (позиция, пауза старого трека) игнорируем. */
+let switching = false;
+
+/**
+ * Проверяем через 1.2 и 3 с, повторяем play(); если к 5 с так и не заиграло — сообщаем,
+ * чтобы кнопка показала ▶ и одно нажатие запустило трек.
+ */
+function ensurePlaying() {
+  const my = ++attempt;
+  const check = (retry: boolean) => active?.w.isPaused((paused: boolean) => {
+    if (my !== attempt || !paused) return;
+    if (retry) active?.w.play(); else handlers.onStuck();
+  });
+  setTimeout(() => check(true), 1200);
+  setTimeout(() => check(true), 3000);
+  setTimeout(() => check(false), 5000);
 }
 
-export const scPause = () => widget?.pause();
-export const scResume = () => widget?.play();
-export const scSeek = (sec: number) => widget?.seekTo(sec * 1000);
-export const scStop = () => widget?.pause();
+function markActive() {
+  for (const s of [active, standby]) s?.iframe.classList.toggle('is-active', s === active);
+}
+
+function makeSlot(url: string, autoplay: boolean, onReady?: (slot: Slot) => void): Slot {
+  const iframe = document.createElement('iframe');
+  iframe.allow = 'autoplay; encrypted-media';
+  iframe.title = 'SoundCloud';
+  iframe.src = widgetSrc(url, autoplay);
+  host().appendChild(iframe);
+  const slot: Slot = { iframe, w: SC.Widget(iframe), url, ready: false };
+  const E = SC.Widget.Events;
+  const live = () => slot === active && !switching;   // события только от активного плеера
+  slot.w.bind(E.READY, () => { slot.ready = true; onReady?.(slot); });
+  slot.w.bind(E.PLAY, () => { if (live()) { handlers.onPlay(); fetchMeta(); } });
+  slot.w.bind(E.PAUSE, () => { if (live()) handlers.onPause(); });
+  slot.w.bind(E.FINISH, () => { if (live()) handlers.onFinish(); });
+  slot.w.bind(E.PLAY_PROGRESS, (e: any) => { if (live()) handlers.onProgress(e.currentPosition / 1000); });
+  slot.w.bind(E.ERROR, () => {
+    if (slot === active) { switching = false; handlers.onError(); }
+    else slot.ready = false;  // запасной не загрузился — просто не используем его
+  });
+  return slot;
+}
+
+function loadInto(slot: Slot, url: string, autoplay: boolean, done?: () => void) {
+  slot.ready = false;
+  slot.url = url;
+  slot.w.load(url, {
+    auto_play: autoplay, visual: false, show_comments: false, hide_related: true,
+    callback: () => { slot.ready = true; done?.(); },
+  });
+}
+
+/**
+ * Запустить трек. Если он уже загружен в запасном плеере — переключение мгновенное и синхронное
+ * (вызывать прямо из обработчика нажатия, без await перед этим).
+ */
+export function scPlay(url: string, h: ScHandlers): void {
+  handlers = h;
+  if (SC && standby?.ready && standby.url === url) {
+    const prev = active;
+    active = standby;
+    standby = prev;
+    switching = false;
+    active.w.play();        // ← синхронно, внутри нажатия
+    prev?.w.pause();
+    markActive();
+    fetchMeta();
+    ensurePlaying();
+    return;
+  }
+  void playAsync(url);
+}
+
+async function playAsync(url: string) {
+  SC ??= await loadApi();
+  if (!active) {
+    active = makeSlot(url, true, (slot) => { if (slot === active) { slot.w.play(); fetchMeta(); ensurePlaying(); } });
+    markActive();
+    return;
+  }
+  switching = true;
+  attempt++;              // отменяем проверки старого трека
+  active.w.pause();       // старый трек замолкает сразу
+  const slot = active;
+  loadInto(slot, url, true, () => {
+    if (slot !== active) return;
+    switching = false; slot.w.play(); fetchMeta(); ensurePlaying();
+  });
+  setTimeout(() => { switching = false; }, 8000);   // страховка, если колбэк не пришёл
+}
+
+/** Заранее загрузить следующий трек в запасной плеер (без звука). */
+export function scPreload(url?: string) {
+  if (!url || !SC || !active) return;
+  if (standby?.url === url && standby.ready) return;
+  if (!standby) { standby = makeSlot(url, false); markActive(); return; }
+  standby.w.pause();
+  loadInto(standby, url, false);
+}
+
+/** Показать официальный плеер SoundCloud (когда iPhone не дал запустить звук без нажатия в нём). */
+export function revealWidget(show = true) {
+  document.getElementById('sc-host')?.classList.toggle('is-visible', show);
+}
+
+export const scPause = () => active?.w.pause();
+export const scResume = () => { active?.w.play(); attempt++; };
+export const scSeek = (sec: number) => active?.w.seekTo(sec * 1000);
+export const scStop = () => { active?.w.pause(); standby?.w.pause(); };
 
 // ---------- импорт по ссылке ----------
 /** Превращает ссылку SoundCloud (трек, плейлист, исполнитель) в список треков. */

@@ -7,6 +7,7 @@ import { fmt, usePlayer, useProgress, useStore } from '../hooks';
 import { Cover } from '../components/Cover';
 import { Icon } from '../components/Icon';
 import { TrackList } from '../components/TrackList';
+import { artFor } from '../art';
 
 /** Полноэкранный плеер (по референсу): обложка-карточка, тонкий прогресс, светящаяся кнопка, «Далее». */
 export function PlayerScreen() {
@@ -22,7 +23,7 @@ export function PlayerScreen() {
 
   return (
     <div className={`player-screen ${playerClosing ? 'is-closing' : ''}`} ref={swipe.ref} {...swipe.handlers}>
-      {t.artwork && <div className="player-bg" style={{ backgroundImage: `url(${t.artwork})` }} />}
+      <div className="player-bg" style={{ backgroundImage: `url(${t.artwork ?? artFor(t.id)})` }} />
       <div className="player-aura" />
 
       <header className="player-head">
@@ -47,7 +48,7 @@ export function PlayerScreen() {
       <div className="player-bottom">
         <div className="player-title">
           <div className="track-meta">
-            <h2>{t.title}</h2>
+            <h2 className="clamp-2">{t.title}</h2>
             <p>{t.artist}</p>
           </div>
           <button className={`icon-btn heart ${liked ? 'liked' : ''}`} aria-label="Нравится"
@@ -58,12 +59,13 @@ export function PlayerScreen() {
 
         <Seek duration={s.duration} />
         {s.error && <p className="err">{s.error}</p>}
+        {s.stuck && <p className="stuck-hint">iPhone не дал запустить трек сам — нажмите ▶</p>}
 
         <div className="controls">
           <button className={`icon-btn side ${s.shuffle ? 'is-on' : ''}`} aria-label="Перемешать" onClick={player.toggleShuffle}><Icon name="shuffle" /></button>
           <button className="icon-btn main" aria-label="Назад" onClick={player.prev}><Icon name="prev" size={30} /></button>
-          <button className="orb" aria-label={s.playing ? 'Пауза' : 'Играть'} onClick={player.toggle}>
-            <Icon name={s.playing ? 'pause' : 'play'} size={30} />
+          <button className={`orb ${s.stuck ? 'is-waiting' : ''}`} aria-label={s.playing ? 'Пауза' : 'Играть'} onClick={player.toggle}>
+            {s.loading ? <span className="spinner" /> : <Icon name={s.playing ? 'pause' : 'play'} size={30} />}
           </button>
           <button className="icon-btn main" aria-label="Вперёд" onClick={player.next}><Icon name="next" size={30} /></button>
           <button className={`icon-btn side ${s.repeat !== 'off' ? 'is-on' : ''}`} aria-label="Повтор" onClick={player.cycleRepeat}>

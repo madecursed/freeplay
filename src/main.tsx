@@ -1,6 +1,7 @@
 import { createRoot } from 'react-dom/client';
 import { App } from './ui/App';
 import './ui/styles.css';
+import './ui/theme.css';
 import { autoSync } from './sync/scSync';
 import { checkForUpdate } from './update';
 

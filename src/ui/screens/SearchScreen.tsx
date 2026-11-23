@@ -6,6 +6,7 @@ import { ScImport } from '../components/ScImport';
 import { TrackList } from '../components/TrackList';
 import { isSoundCloudUrl } from '../../player/scWidget';
 import { useSyncExternalStore } from 'react';
+import { useDiscovery } from '../../recommend/discovery';
 
 /**
  * Поиск по вашей библиотеке SoundCloud (мгновенно, без лимитов) + вставка ссылок для импорта.
@@ -13,6 +14,7 @@ import { useSyncExternalStore } from 'react';
  */
 export function SearchScreen() {
   const searches = useStore(getSearches);
+  const d = useDiscovery();
   const version = useSyncExternalStore(subscribeStore, () => libraryTracks().length);
   const [q, setQ] = useState('');
   const query = q.trim().toLowerCase();
@@ -50,6 +52,12 @@ export function SearchScreen() {
                   <li key={s} onClick={() => setQ(s)}><Icon name="clock" size={18} /><span>{s}</span><Icon name="chevron" size={16} /></li>
                 ))}
               </ul>
+            </>
+          )}
+          {d.forYou.length > 0 && (
+            <>
+              <div className="section-head"><h3>Популярное для тебя</h3></div>
+              <div className="glass-list"><TrackList tracks={d.forYou.slice(0, 6)} /></div>
             </>
           )}
           <p className="hint">Ищет по названию, исполнителю, жанру и тегам среди импортированных треков. Чтобы добавить новую музыку — вставьте ссылку SoundCloud.</p>
