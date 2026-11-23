@@ -1,0 +1,1 @@
+{"root":["./src/main.tsx","./src/types.ts","./src/player/player.ts","./src/recommend/profile.ts","./src/recommend/recommend.ts","./src/sources/audius.ts","./src/sources/index.ts","./src/sources/jamendo.ts","./src/sources/soundcloud.ts","./src/storage/store.ts","./src/ui/app.tsx","./src/ui/player.tsx","./src/ui/tracklist.tsx","./src/ui/hooks.ts"],"version":"5.6.3"}
