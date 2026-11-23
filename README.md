@@ -23,7 +23,8 @@ npm run dev            # откройте адрес Network с телефона
 
 **SoundCloud:** зарегистрировать приложение на soundcloud.com/you/apps → развернуть `worker/soundcloud-proxy.js` на Cloudflare Workers (бесплатно) с переменными `SC_CLIENT_ID`, `SC_CLIENT_SECRET` → адрес воркера в `VITE_SOUNDCLOUD_PROXY`. Условие SoundCloud — указывать автора и ссылку на трек (есть в полноэкранном плеере).
 
-Для сборки на GitHub ключи кладутся в Settings → Secrets → Actions: `JAMENDO_CLIENT_ID`, `SOUNDCLOUD_PROXY`.
+## Публикация
+`npm run deploy` — собирает проект (с ключами из `.env`) и пушит в ветку `gh-pages`. Сайт: https://madecursed.github.io/freeplay/
 
 ## Структура
 ```
@@ -37,7 +38,7 @@ src/
   storage/store.ts    лайки, история, дизлайки (localStorage)
   ui/                 экраны «Для вас», «Поиск», «Библиотека», плеер
 worker/               прокси для SoundCloud (Cloudflare Worker)
-.github/workflows/    автодеплой на GitHub Pages при push в main
+scripts/deploy.mjs    публикация на GitHub Pages (npm run deploy)
 ```
 
 ## Как работают рекомендации
