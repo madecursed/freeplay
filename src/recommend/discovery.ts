@@ -1,7 +1,7 @@
 import { useSyncExternalStore } from 'react';
 import type { Track } from '../types';
 import { loadSounds } from '../player/scWidget';
-import { getHistory, isDisliked, libraryTracks } from '../storage/store';
+import { getHistory, getLiked, isArtistBlocked, isExcluded, libraryTracks } from '../storage/store';
 import { load, save } from '../storage/store';
 import { matches, score } from './recommend';
 import { MIXES } from './moods';
@@ -55,20 +55,34 @@ export function discoveryPool(): Track[] {
   return Object.values(cache).flatMap((c) => [...c.likes, ...c.uploads]);
 }
 
-/** Исполнители-«семена»: по весу в профиле вкуса, иначе по частоте в библиотеке. Нужен их ID. */
+/**
+ * Исполнители-«семена» — те, кого вы реально слушаете:
+ * вес в профиле вкуса (дослушивания, лайки, пропуски) + лайки + недавняя история.
+ * Просто присутствие в импортированных плейлистах весит мало. Скрытые и часто пропускаемые — исключены.
+ * Из лучших 12 случайно (пропорционально весу) берём SEEDS — подборки меняются от обновления к обновлению.
+ */
 function seedArtists(): { id: number; name: string }[] {
-  const lib = libraryTracks();
   const ids = new Map<string, number>();
-  const freq = new Map<string, number>();
-  for (const t of lib) {
-    if (t.artistId) ids.set(t.artist, t.artistId);
-    freq.set(t.artist, (freq.get(t.artist) ?? 0) + 1);
-  }
-  return [...ids.entries()]
-    .map(([name, id]) => ({ id, name, w: weight(`artist:${name.toLowerCase()}`) * 3 + (freq.get(name) ?? 0) + Math.random() }))
+  const sc = new Map<string, number>();
+  const add = (name: string, v: number) => sc.set(name, (sc.get(name) ?? 0) + v);
+  for (const t of libraryTracks()) { if (t.artistId) ids.set(t.artist, t.artistId); add(t.artist, 0.3); }
+  for (const t of getLiked()) add(t.artist, 2);
+  for (const t of getHistory().slice(0, 120)) add(t.artist, 1);
+  const cands = [...ids.entries()]
+    .filter(([name]) => !isArtistBlocked(name) && artistWeight(name) > -1)
+    .map(([name, id]) => ({ id, name, w: Math.max(0.1, (sc.get(name) ?? 0) + artistWeight(name) * 3) }))
     .sort((a, b) => b.w - a.w)
-    .slice(0, SEEDS);
+    .slice(0, 12);
+  const picked: typeof cands = [];
+  while (picked.length < SEEDS && cands.length) {
+    const total = cands.reduce((s, c) => s + c.w, 0);
+    let r = Math.random() * total, i = 0;
+    while (i < cands.length - 1 && (r -= cands[i].w) > 0) i++;
+    picked.push(cands.splice(i, 1)[0]);
+  }
+  return picked;
 }
+const artistWeight = (name: string) => weight(`artist:${name.toLowerCase()}`);
 
 async function fetchArtist(id: number, name: string, force: boolean): Promise<ArtistCache | null> {
   const c = cache[id];
@@ -93,29 +107,35 @@ function rank(tracks: Track[], recent: Set<string>): Track[] {
 
 const uniq = (tracks: Track[]) => [...new Map(tracks.map((t) => [t.id, t])).values()];
 
+/** Не больше max треков одного исполнителя (по порядку — лучшие остаются). */
+function capArtists(tracks: Track[], max = 2): Track[] {
+  const n = new Map<string, number>();
+  return tracks.filter((t) => { const c = n.get(t.artist) ?? 0; n.set(t.artist, c + 1); return c < max; });
+}
+
 /** Собирает разделы главной из кэша (быстро, без сети). */
 function compose(entries: ArtistCache[]) {
   const lib = libraryTracks();
   const inLib = new Set(lib.map((t) => t.id));
   const history = getHistory();
   const recent = new Set(history.slice(0, 40).map((t) => t.id));
-  const ok = (t: Track) => !isDisliked(t.id) && !!t.title && t.title !== 'Трек SoundCloud';
+  const ok = (t: Track) => t.source === 'soundcloud' && !isExcluded(t) && artistWeight(t.artist) > -1.5 && !!t.title && t.title !== 'Трек SoundCloud';
   const fresh = (t: Track) => ok(t) && !inLib.has(t.id);
 
   const similar: ArtistRow[] = entries
-    .map((e) => ({ artist: e.name, tracks: rank(uniq(e.likes.filter((t) => fresh(t) && t.artist !== e.name)), recent).slice(0, 12) }))
+    .map((e) => ({ artist: e.name, tracks: capArtists(rank(uniq(e.likes.filter((t) => fresh(t) && t.artist !== e.name)), recent)).slice(0, 15) }))
     .filter((r) => r.tracks.length >= 3);
 
-  const newest = uniq(entries.flatMap((e) => e.uploads.filter(fresh)))
-    .sort((a, b) => (b.created ?? '').localeCompare(a.created ?? ''))
+  const newest = capArtists(uniq(entries.flatMap((e) => e.uploads.filter(fresh)))
+    .sort((a, b) => (b.created ?? '').localeCompare(a.created ?? '')), 3)
     .slice(0, 15);
 
   // давно не играло: есть в библиотеке, но нет в последних 60 прослушиваниях
   const played = new Set(history.slice(0, 60).map((t) => t.id));
-  const rediscover = rank(lib.filter((t) => ok(t) && !played.has(t.id)), recent).slice(0, 12);
+  const rediscover = capArtists(rank(lib.filter((t) => ok(t) && !played.has(t.id)), recent)).slice(0, 15);
 
-  // «Для тебя»: ~70% новое, ~30% забытое из библиотеки, по вкусу
-  const newPool = rank(uniq([...similar.flatMap((r) => r.tracks), ...newest]), recent);
+  // «Для тебя»: ~70% новое, ~30% забытое из библиотеки, по вкусу; не больше 2 треков исполнителя
+  const newPool = capArtists(rank(uniq([...similar.flatMap((r) => r.tracks), ...newest]), recent), 3);
   const forYou: Track[] = [];
   const used = new Set<string>();
   let n = 0, o = 0;
@@ -124,8 +144,9 @@ function compose(entries: ArtistCache[]) {
     const t = takeOld ? rediscover[o++] : newPool[n++] ?? rediscover[o++];
     if (t && !used.has(t.id)) { used.add(t.id); forYou.push(t); }
   }
-  const mixes = buildMixes({ newPool, similar, newest, rediscover, pool: uniq([...entries.flatMap((e) => [...e.likes, ...e.uploads]).filter(fresh), ...lib.filter(ok)]), recent });
-  set({ forYou: noRepeats(forYou), fresh: newest, similar, rediscover, mixes, seeds: entries.length });
+  const pool = uniq([...entries.flatMap((e) => [...e.likes, ...e.uploads]).filter(fresh), ...lib.filter(ok)]);
+  const mixes = buildMixes({ newPool, similar, newest, rediscover, pool, recent });
+  set({ forYou: noRepeats(capArtists(forYou)), fresh: newest, similar, rediscover, mixes, seeds: entries.length });
 }
 
 // не больше 2 треков одного исполнителя подряд
@@ -172,16 +193,18 @@ const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
  */
 function buildMixes(p: { newPool: Track[]; similar: ArtistRow[]; newest: Track[]; rediscover: Track[]; pool: Track[]; recent: Set<string> }): RecMix[] {
   const out: RecMix[] = [];
+  const taken = new Set<string>();
   const MIN = 5;
-  if (p.newPool.length >= MIN) out.push({ id: 'discover', title: 'Открытия', subtitle: 'для тебя', tracks: noRepeats(p.newPool.slice(0, 40)), hue: 270 });
-  for (const [i, r] of p.similar.entries())
-    if (r.tracks.length >= MIN) out.push({ id: 'sim-' + r.artist, title: 'Если нравится', subtitle: r.artist, tracks: r.tracks, hue: 280 + i * 8 });
-  if (p.newest.length >= MIN) out.push({ id: 'fresh', title: 'Новинки', subtitle: 'твоих артистов', tracks: p.newest, hue: 255 });
+  // каждый трек — максимум в одной подборке; порядок = приоритет
+  const add = (m: Omit<RecMix, 'tracks'>, tracks: Track[], limit = 30) => {
+    const ts = capArtists(tracks.filter((t) => !taken.has(t.id))).slice(0, limit);
+    if (ts.length < MIN) return;
+    ts.forEach((t) => taken.add(t.id));
+    out.push({ ...m, tracks: noRepeats(ts) });
+  };
 
-  for (const m of MIXES) {
-    const ts = p.pool.filter((t) => matches(t, m.tags));
-    if (ts.length >= MIN) out.push({ id: 'mood-' + m.id, title: m.title, subtitle: m.subtitle, tracks: noRepeats(rank(ts, p.recent).slice(0, 40)), hue: m.hue });
-  }
+  for (const [i, r] of p.similar.entries()) add({ id: 'sim-' + r.artist, title: 'Если нравится', subtitle: r.artist, hue: 280 + i * 8 }, r.tracks, 15);
+  for (const m of MIXES) add({ id: 'mood-' + m.id, title: m.title, subtitle: m.subtitle, hue: m.hue }, rank(p.pool.filter((t) => matches(t, m.tags)), p.recent));
 
   const byGenre = new Map<string, Track[]>();
   for (const t of p.pool) {
@@ -190,9 +213,12 @@ function buildMixes(p: { newPool: Track[]; similar: ArtistRow[]; newest: Track[]
     if (!byGenre.has(g)) byGenre.set(g, []);
     byGenre.get(g)!.push(t);
   }
-  [...byGenre.entries()].filter(([, ts]) => ts.length >= 6).sort((a, b) => b[1].length - a[1].length).slice(0, 4)
-    .forEach(([g, ts], i) => out.push({ id: 'genre-' + g, title: cap(g), subtitle: 'микс', tracks: noRepeats(rank(ts, p.recent).slice(0, 40)), hue: 250 + i * 14 }));
+  [...byGenre.entries()].sort((a, b) => b[1].length - a[1].length).slice(0, 5)
+    .forEach(([g, ts], i) => add({ id: 'genre-' + g, title: cap(g), subtitle: 'микс', hue: 250 + i * 14 }, rank(ts, p.recent)));
 
-  if (p.rediscover.length >= MIN) out.push({ id: 'forgotten', title: 'Забытое', subtitle: 'из библиотеки', tracks: p.rediscover, hue: 300 });
-  return out;
+  add({ id: 'discover', title: 'Открытия', subtitle: 'для тебя', hue: 270 }, p.newPool);
+  add({ id: 'fresh', title: 'Новинки', subtitle: 'твоих артистов', hue: 255 }, p.newest);
+  add({ id: 'forgotten', title: 'Забытое', subtitle: 'из библиотеки', hue: 300 }, p.rediscover);
+  // «Открытия» — первыми на главной
+  return out.sort((a, b) => +(b.id === 'discover') - +(a.id === 'discover'));
 }

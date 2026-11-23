@@ -1,7 +1,7 @@
 import type { Track } from '../types';
 import { fromAll } from '../sources';
 import { features, isEmpty, top, weight } from './profile';
-import { getHistory, isDisliked, libraryTracks } from '../storage/store';
+import { getHistory, isExcluded, libraryTracks } from '../storage/store';
 import { discoveryPool } from './discovery';
 
 /**
@@ -25,7 +25,7 @@ export async function recommend(limit = 30, exclude: Set<string> = new Set(), se
 
   const recent = new Set(getHistory().slice(0, 30).map((t) => t.id));
   const scored = [...candidates.values()]
-    .filter((t) => !exclude.has(t.id) && !isDisliked(t.id) && (t.duration === 0 || t.duration > 60))
+    .filter((t) => !exclude.has(t.id) && !isExcluded(t) && (t.duration === 0 || t.duration > 60))
     .map((t) => ({ t, s: score(t, recent.has(t.id)) }))
     .sort((a, b) => b.s - a.s);
 

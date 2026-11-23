@@ -32,15 +32,36 @@ export function pushHistory(t: Track) {
 }
 export function clearHistory() { history = []; save('fp.history', history); emit(); }
 
+// ---- Чистка: приложение работает только с SoundCloud, треки старых каталогов (Audius, Jamendo…) убираем ----
+const onlySc = (list: Track[]) => list.filter((t) => t.source === 'soundcloud');
+if (liked.some((t) => t.source !== 'soundcloud')) { liked = onlySc(liked); save('fp.liked', liked); }
+if (history.some((t) => t.source !== 'soundcloud')) { history = onlySc(history); save('fp.history', history); }
+
+// ---- Скрытые исполнители (не рекомендовать) ----
+let blocked: string[] = load('nc.blockedArtists', []);
+export const getBlocked = () => blocked;
+export const isArtistBlocked = (artist: string) => blocked.includes(artist.toLowerCase());
+export function blockArtist(artist: string) {
+  const a = artist.toLowerCase();
+  if (!blocked.includes(a)) { blocked = [...blocked, a]; save('nc.blockedArtists', blocked); emit(); }
+}
+export function unblockArtist(artist: string) { blocked = blocked.filter((a) => a !== artist.toLowerCase()); save('nc.blockedArtists', blocked); emit(); }
+
 // ---- Дизлайки ----
 let disliked: string[] = load('fp.disliked', []);
 export const isDisliked = (id: string) => disliked.includes(id);
+/** Не рекомендовать: дизлайк трека или скрытый исполнитель. */
+export const isExcluded = (t: Track) => disliked.includes(t.id) || blocked.includes(t.artist.toLowerCase());
 export function dislike(id: string) {
   if (!disliked.includes(id)) { disliked = [...disliked, id].slice(-1000); save('fp.disliked', disliked); emit(); }
 }
 
 // ---- Плейлисты ----
 let playlists: Playlist[] = load('nc.playlists', []);
+if (playlists.some((p) => p.tracks.some((t) => t.source !== 'soundcloud'))) {
+  playlists = playlists.map((p) => ({ ...p, tracks: p.tracks.filter((t) => t.source === 'soundcloud') }));
+  save('nc.playlists', playlists);
+}
 const savePl = () => { save('nc.playlists', playlists); emit(); };
 export const getPlaylists = () => playlists;
 export const getPlaylist = (id: string) => playlists.find((p) => p.id === id);

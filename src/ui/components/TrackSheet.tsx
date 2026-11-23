@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { player } from '../../player/player';
 import { record, SIGNAL } from '../../recommend/profile';
-import { addToPlaylist, createPlaylist, dislike, getPlaylists, isLiked, removeFromPlaylist, toggleLike } from '../../storage/store';
+import { addToPlaylist, blockArtist, createPlaylist, dislike, getPlaylists, isLiked, removeFromPlaylist, toggleLike } from '../../storage/store';
+import { refreshDiscovery } from '../../recommend/discovery';
 import { nav, useNav } from '../navigation';
 import { usePlayer, useStore } from '../hooks';
 import { Cover } from './Cover';
@@ -9,7 +10,7 @@ import { Icon } from './Icon';
 
 /** Нижняя шторка действий с треком. */
 export function TrackSheet() {
-  const { sheet } = useNav();
+  const { sheet, sheetClosing } = useNav();
   const playlists = useStore(getPlaylists);
   useStore(() => sheet && isLiked(sheet.track.id));
   const [mode, setMode] = useState<'actions' | 'playlists'>('actions');
@@ -21,7 +22,7 @@ export function TrackSheet() {
   const act = (fn: () => void) => () => { fn(); close(); };
 
   return (
-    <div className="sheet-backdrop" onClick={close}>
+    <div className={`sheet-backdrop ${sheetClosing ? 'is-closing' : ''}`} onClick={close}>
       <div className="sheet glass" onClick={(e) => e.stopPropagation()}>
         <div className="sheet-head">
           <Cover track={t} size="sm" />
@@ -44,7 +45,8 @@ export function TrackSheet() {
             {playlistId && playlistId !== 'liked' && (
               <button onClick={act(() => removeFromPlaylist(playlistId, t.id))}><Icon name="trash" />Удалить из плейлиста</button>
             )}
-            <button onClick={act(() => { dislike(t.id); record(t, SIGNAL.dislike); })}><Icon name="ban" />Не рекомендовать</button>
+            <button onClick={act(() => { dislike(t.id); record(t, SIGNAL.dislike); refreshDiscovery().catch(() => {}); })}><Icon name="ban" />Не рекомендовать трек</button>
+            <button onClick={act(() => { blockArtist(t.artist); record(t, SIGNAL.dislike); refreshDiscovery().catch(() => {}); })}><Icon name="user" />Не рекомендовать {t.artist}</button>
             {t.permalink && <a href={t.permalink} target="_blank" rel="noreferrer" onClick={close}><Icon name="link" />Открыть в {t.source}</a>}
           </div>
         ) : (

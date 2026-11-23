@@ -372,3 +372,117 @@ small.block { display: block; color: var(--muted); font-size: 12px; margin-top: 
 .mix-art > img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .mix-art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(160deg, rgba(168, 85, 247, .18), rgba(20, 8, 40, .28)); pointer-events: none; }
 .mix-card { min-width: 0; }
+
+/* ============ Плавность: переходы экранов (View Transitions) ============ */
+main { view-transition-name: page; }
+.tab-bar { view-transition-name: tabbar; }
+.mini-player { view-transition-name: mini; }
+::view-transition-old(root), ::view-transition-new(root),
+::view-transition-group(tabbar), ::view-transition-old(tabbar), ::view-transition-new(tabbar),
+::view-transition-group(mini), ::view-transition-old(mini), ::view-transition-new(mini) { animation: none; }
+::view-transition-group(page) { animation-duration: .34s; }
+html[data-nav=forward]::view-transition-old(page) { animation: vt-out-left .3s cubic-bezier(.4, 0, .2, 1) both; }
+html[data-nav=forward]::view-transition-new(page) { animation: vt-in-right .38s cubic-bezier(.22, 1, .36, 1) both; }
+html[data-nav=back]::view-transition-old(page) { animation: vt-out-right .3s cubic-bezier(.4, 0, .2, 1) both; }
+html[data-nav=back]::view-transition-new(page) { animation: vt-in-left .38s cubic-bezier(.22, 1, .36, 1) both; }
+html[data-nav=tab]::view-transition-old(page) { animation: vt-fade-out .16s ease both; }
+html[data-nav=tab]::view-transition-new(page) { animation: vt-fade-up .3s cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes vt-in-right { from { transform: translateX(30%); opacity: 0; } }
+@keyframes vt-out-left { to { transform: translateX(-14%); opacity: 0; } }
+@keyframes vt-out-right { to { transform: translateX(30%); opacity: 0; } }
+@keyframes vt-in-left { from { transform: translateX(-14%); opacity: 0; } }
+@keyframes vt-fade-out { to { opacity: 0; } }
+@keyframes vt-fade-up { from { opacity: 0; transform: translateY(12px); } }
+/* браузеры без View Transitions: анимация появления в нужную сторону */
+@supports not (view-transition-name: page) {
+  html[data-navdir=forward] .screen { animation: vt-in-right .36s cubic-bezier(.22, 1, .36, 1) both; }
+  html[data-navdir=back] .screen { animation: vt-in-left .36s cubic-bezier(.22, 1, .36, 1) both; }
+  html[data-navdir=tab] .screen { animation: vt-fade-up .3s cubic-bezier(.22, 1, .36, 1) both; }
+}
+@supports (view-transition-name: page) { html[data-navdir] .screen { animation: none; } }
+
+/* плеер: открытие пружиной, закрытие вниз */
+.player-screen { animation: player-in .46s cubic-bezier(.22, 1, .36, 1) backwards; will-change: transform; }
+.player-screen.is-closing { animation: player-out .26s cubic-bezier(.4, 0, 1, 1) both; }
+@keyframes player-in { from { transform: translateY(100%); } }
+@keyframes player-out { to { transform: translateY(100%); } }
+.player-cover { animation: cover-in .55s .06s cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes cover-in { from { transform: scale(.88); opacity: 0; } }
+.player-title, .seek-wrap, .controls, .up-next { animation: vt-fade-up .5s cubic-bezier(.22, 1, .36, 1) both; }
+.seek-wrap { animation-delay: .05s; } .controls { animation-delay: .1s; } .up-next { animation-delay: .15s; }
+.player-queue { animation: vt-fade-up .3s cubic-bezier(.22, 1, .36, 1) both; }
+
+/* шторка: закрытие */
+.sheet { animation-duration: .36s; animation-timing-function: cubic-bezier(.22, 1, .36, 1); }
+.sheet-backdrop.is-closing { animation: vt-fade-out .22s ease both; }
+.sheet-backdrop.is-closing .sheet { animation: player-out .22s cubic-bezier(.4, 0, 1, 1) both; }
+
+/* отклик на нажатие */
+.track-row, .lib-list li, .mix-card, .track-card, .chip, .cta, .mood-chip, .hero, .segmented button, .pill, .play-btn {
+  transition: transform .18s cubic-bezier(.22, 1, .36, 1), background-color .2s, box-shadow .25s, color .2s; }
+.mix-card:active, .track-card:active, .hero:active, .cta:active { transform: scale(.965); }
+.track-row:active, .lib-list li:active { transform: scale(.985); }
+.chip:active, .segmented button:active, .pill:active, .mood-chip:active, .play-btn:active { transform: scale(.94); }
+.icon-btn { transition: transform .15s, color .2s; } .icon-btn:active { transform: scale(.88); }
+
+/* появление списков по очереди */
+.stagger > li, .track-list > li:nth-child(-n+12), .card-row > * { animation: vt-fade-up .45s cubic-bezier(.22, 1, .36, 1) both; }
+.stagger > li:nth-child(2), .track-list > li:nth-child(2), .card-row > :nth-child(2) { animation-delay: .04s; }
+.stagger > li:nth-child(3), .track-list > li:nth-child(3), .card-row > :nth-child(3) { animation-delay: .08s; }
+.stagger > li:nth-child(4), .track-list > li:nth-child(4), .card-row > :nth-child(4) { animation-delay: .12s; }
+.stagger > li:nth-child(5), .track-list > li:nth-child(5), .card-row > :nth-child(5) { animation-delay: .16s; }
+.stagger > li:nth-child(6), .track-list > li:nth-child(6) { animation-delay: .2s; }
+.stagger > li:nth-child(7), .track-list > li:nth-child(7) { animation-delay: .24s; }
+.stagger > li:nth-child(n+8), .track-list > li:nth-child(n+8) { animation-delay: .28s; }
+
+/* таб-бар */
+.tab-bar button { transition: color .25s; }
+.tab-bar button svg { transition: transform .35s cubic-bezier(.22, 1, .36, 1), filter .3s; }
+.tab-bar button.is-active svg { transform: translateY(-2px) scale(1.08); }
+
+/* ============ Настроение (референс) ============ */
+.mood-screen { position: relative; min-height: calc(100dvh - var(--tabbar) - 120px); overflow: hidden; margin: 0 -18px; padding: 0 18px; }
+.mood-head { display: flex; align-items: center; gap: 6px; min-height: 48px; position: relative; z-index: 1; }
+.mood-head h3 { font-size: 17px; font-weight: 500; }
+.mood-burst { position: absolute; top: -20px; right: -90px; width: 320px; height: 320px; opacity: 1; color: inherit; filter: drop-shadow(0 0 30px rgba(168, 85, 247, .55));
+  pointer-events: none; animation: burst-in 1s cubic-bezier(.22, 1, .36, 1) both; }
+@keyframes burst-in { from { opacity: 0; transform: scale(.7) rotate(-20deg); } }
+.mood-rings { transform-box: fill-box; transform-origin: center; animation: spin 40s linear infinite; }
+.mood-star { transform-box: fill-box; transform-origin: center; animation: star-pulse 4s ease-in-out infinite; filter: drop-shadow(0 0 10px #c084fc) drop-shadow(0 0 24px rgba(168, 85, 247, .7)); }
+@keyframes star-pulse { 50% { transform: scale(.92); opacity: .85; } }
+.mood-sparks { animation: twinkle 2.4s ease-in-out infinite reverse; }
+.mood-title { position: relative; z-index: 1; font-size: 32px; line-height: 1.2; font-weight: 500; margin: 120px 0 8px; animation: vt-fade-up .6s .1s cubic-bezier(.22, 1, .36, 1) both; }
+.mood-title .accent { color: var(--accent); text-shadow: 0 0 18px rgba(192, 132, 252, .7); }
+.mood-sub { position: relative; z-index: 1; color: var(--muted); margin: 0 0 26px; font-size: 14px; animation: vt-fade-up .6s .15s cubic-bezier(.22, 1, .36, 1) both; }
+.mood-grid { position: relative; z-index: 1; display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.mood-chip { display: flex; align-items: center; gap: 10px; padding: 14px 16px; border-radius: 999px; font-size: 14.5px; color: var(--text);
+  background: rgba(30, 19, 48, .72); border: 1px solid rgba(196, 150, 255, .2); box-shadow: inset 0 1px 0 rgba(255, 255, 255, .04);
+  animation: vt-fade-up .5s cubic-bezier(.22, 1, .36, 1) both; }
+.mood-chip svg { color: var(--accent); flex: none; }
+.mood-chip.is-picked { background: linear-gradient(135deg, rgba(168, 85, 247, .5), rgba(109, 40, 217, .45)); border-color: rgba(233, 213, 255, .6);
+  box-shadow: 0 0 24px rgba(192, 132, 252, .55); }
+.mood-chip.is-picked svg { color: #fff; }
+
+/* ============ Библиотека (референс) ============ */
+.segmented { gap: 8px; margin: 4px 0 16px; }
+.segmented button { padding: 8px 16px; font-size: 13.5px; border-radius: 999px; background: rgba(30, 19, 48, .6); border: 1px solid rgba(196, 150, 255, .16); color: var(--muted); }
+.segmented button.is-on { color: #fff; border-color: transparent; background: linear-gradient(135deg, #a855f7, #7c3aed); box-shadow: 0 0 18px rgba(168, 85, 247, .45); }
+.library-screen .lib-list li { padding: 8px 4px; gap: 14px; border-radius: 14px; }
+.library-screen .lib-list li.is-static:active { transform: none; }
+.tile { width: 58px !important; height: 58px !important; border-radius: 14px !important; flex: none; display: grid; place-items: center; border: 1px solid var(--border); }
+.tile-create { border: 1px dashed rgba(196, 150, 255, .35); color: var(--muted); background: rgba(30, 19, 48, .4); }
+.tile-sc { color: #ff8a3d; background: rgba(255, 138, 61, .08); border-color: rgba(255, 138, 61, .25); }
+.tile-liked { color: #fae8ff; background: radial-gradient(circle at 50% 45%, #c084fc, #6d28d9 55%, #2e1065); box-shadow: 0 0 20px rgba(168, 85, 247, .35); }
+.tile-liked svg { filter: drop-shadow(0 0 8px #f5d0fe); }
+.tile-blocked { color: var(--muted); background: rgba(30, 19, 48, .4); }
+.glow-heart { filter: drop-shadow(0 0 6px rgba(232, 121, 249, .8)); }
+.lib-form { display: block !important; padding: 0 !important; }
+.lib-form:active { transform: none !important; }
+.lib-tracks-head { display: flex; align-items: center; justify-content: space-between; margin: 0 4px 8px; font-size: 13px; }
+.lib-tracks-head .chip { display: inline-flex; align-items: center; gap: 6px; }
+.cap { text-transform: capitalize; }
+.muted { color: var(--muted); }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: .01ms !important; animation-iteration-count: 1 !important; transition-duration: .01ms !important; }
+}
